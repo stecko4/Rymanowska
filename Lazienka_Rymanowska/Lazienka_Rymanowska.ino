@@ -17,6 +17,7 @@ BME280_I2C bme(0x76);			//I2C using address 0x76
 //#define BL+YNK_PRINT Serial
 #include <ESP8266WiFi.h>
 #include <BlynkSimpleEsp8266.h>
+WidgetTerminal terminal(V40);	//Attach virtual serial terminal to Virtual Pin V40
 #include <SimpleTimer.h>
 SimpleTimer TimerBlynkCheck;	//Do sprawdzana połączenia z Blynkiem uruchamiany do 30s
 SimpleTimer TimerMainFunction;	//dla MainFunction uruchamiany do 3s
@@ -128,6 +129,33 @@ void Wyslij_Dane() {					//Wysyła dane na serwer Blynk
 	Blynk.virtualWrite(V6, SetHumidAuto);	//Wilgotności przy której załączy się wentylator w trybie automatycznym [%] 
 
 	Blynk.virtualWrite(V25, map(WiFi.RSSI(), -105, -40, 0, 100) );	//Przesyła siłę sygnału Wi-Fi [%]
+}
+
+BLYNK_WRITE(V40) {						//Obsluga terminala
+	if (String("Ports") == param.asStr()) {
+		terminal.clear();
+		terminal.println("Port      Description        Type");
+		terminal.println("V0        Temperature        Value");
+		terminal.println("V1        Humdity            Value");
+		terminal.println("V2        Pressure           Value");
+		terminal.println("V3        DewPoint           Value");
+		terminal.println("V4        Abs Humdity        Value");
+		terminal.println("V5        Heat Index         Value");
+		terminal.println("V25       WiFi Signal        Value");
+		terminal.println("V40       Terminal           Terminal");
+	}
+	else if (String("Hello") == param.asStr()) {
+		terminal.clear();
+		terminal.println("Hi Lukasz. Have a great day!");
+	}
+	else {
+	terminal.clear();
+		terminal.println("Type 'Ports' to show list") ;
+		terminal.println("or 'Hello' to say hello!") ;
+	}
+
+	// Ensure everything is sent
+	terminal.flush();
 }
 
 BLYNK_WRITE(V10) {					//Ustawienie progu wilgotności powyżej którego włączy się wentylator (plus próg)

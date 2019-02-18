@@ -26,6 +26,7 @@ U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SD
 #include <TimeLib.h>
 #include <WidgetRTC.h>
 WidgetBridge bridge1(V20);		//Initiating Bridge Widget on V20 of Device A
+WidgetTerminal terminal(V40);	//Attach virtual serial terminal to Virtual Pin V40
 WidgetLED LED_CO(V8);			//Inicjacja diody LED dla załączania CO
 SimpleTimer TimerBlynkCheck;	//Do sprawdzana połączenia z Blynkiem uruchamiany do 30s
 SimpleTimer TimerMainFunction;	//dla MainFunction uruchamiany do 3s
@@ -243,6 +244,34 @@ void Wyslij_Dane() {			//Wysyłanie danych na serwer Blynka
 	//TESTOWANIE TYMCZOSOWE
 	Blynk.virtualWrite(V30, CZAS_START_MANUAL); 
 	Blynk.virtualWrite(V31, CZAS_START_AUTO); 
+}
+
+BLYNK_WRITE(V40) {						//Obsluga terminala
+	if (String("Ports") == param.asStr()) {
+		terminal.clear();
+		terminal.println("Port      Description        Type");
+		terminal.println("V0        Temperature        Value");
+		terminal.println("V1        Humdity            Value");
+		terminal.println("V2        Pressure           Value");
+		terminal.println("V3        DewPoint           Value");
+		terminal.println("V4        Abs Humdity        Value");
+		terminal.println("V5        Heat Index         Value");
+		terminal.println("V6        Soil Moisture      Value");
+		terminal.println("V25       WiFi Signal        Value");
+		terminal.println("V40       Terminal           Terminal");
+	}
+	else if (String("Hello") == param.asStr()) {
+		terminal.clear();
+		terminal.println("Hi Lukasz. Have a great day!");
+	}
+	else {
+	terminal.clear();
+		terminal.println("Type 'Ports' to show list") ;
+		terminal.println("or 'Hello' to say hello!") ;
+	}
+
+	// Ensure everything is sent
+	terminal.flush();
 }
 
 void OLED_Display() {		//Wyświetlanie na ekranie OLED 0.96"
