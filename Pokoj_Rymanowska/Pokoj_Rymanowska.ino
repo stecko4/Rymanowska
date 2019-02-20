@@ -39,7 +39,7 @@ SimpleTimer TimerMainFunction;				//dla MainFunction uruchamiany do 3s
 WidgetRTC rtc;						//Inicjacja widgety zegara czasu rzeczywistego RTC
 
 int		Tryb_Sterownika		= 0;		//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
-float		SetTempManual		= 21;		//Temperatura nastawiana manulnie z aplikacji Blynka 
+float		SetTempManual		= 21;		//Temperatura nastawiana manualnie z aplikacji Blynka 
 float		SetTempActual		= 18.5;		//Temperatura według której sterowana jest temperatura (auto lub manual)
 float SetTempSchedule[7][24] = {
 //00:00 01:00 02:00 03:00 04:00 05:00 06:00 07:00 08:00 09:00 10:00 11:00 12:00 13:00 14:00 15:00 16:00 17:00 18:00 19:00 20:00 21:00 22:00 23:00
@@ -50,7 +50,7 @@ float SetTempSchedule[7][24] = {
   {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5 },  //Czwartek
   {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 20.8, 18.5 },  //Piątek
   {18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5 }   //Sobota
-}; //Ustawienia temperatury dla poszczeguknych dnii godzin, temperatura musi być pomiędzy 14 a 26 stopni celcjusza z dokładnością do 2 miejsc po przecinku
+}; //Ustawienia temperatury dla poszczególnych dni/godzin, temperatura musi być pomiędzy 14 a 26 stopni Celsjusza z dokładnością do 2 miejsc po przecinku
 
 int		OLED_ON			= 1;		//Przyjmuje wartość '1' dla OLED włączony i '0' dla OLED wyłączony
 boolean		Podlane			= true;		//Przyjmuje wartość true gdy podlane czyli wilgotność >80% i false gdy sucho wilgotność <60%
@@ -61,14 +61,14 @@ float		RH 			= 0;		//Soil Relative Humidity in %
 long		CZAS_START_MANUAL	= 0;		//Ustawienie czasu przejścia sterowania w trym MANUAL (wartość w sekundach)
 long		CZAS_START_AUTO		= 0;		//Ustawienie czasu przejścia sterowania w trym AUTO (wartość w sekundach)
 int		dzien			= 0;		// day of the week (1-7), Sunday is day 1
-int		godz			= 1;		// the hour now  (0-23)
+int		godz			= 1;		// the hour now (0-23)
 float		temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);	//Zmienne dla danych z czujnika BME280
 
 //STAŁE
 const char	ssid[]			= "XXXX";
 const char	pass[]			= "XXXX";
 const char	auth[]			= "XXXX";	//Token Pokój Rymanowska
-const int	checkInterval		= 30000;	//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwererem Blynk
+const int	checkInterval		= 30000;	//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
 const int	HeatCO			= D6;		//Pin do włączania CO w sterowniku w łazience
 const int	MinTemp			= 14;		//Najniższa możliwa temperatura do ustawienia
 const int	MaxTemp			= 26;		//Najwyższa możliwa temperatura do ustawienia
@@ -202,22 +202,22 @@ void TrybManAuto() {			//Ustawienie trybów sterowania i temperatury do załącz
 	dzien = weekday(now()) - 1;			//day of the week (1-7), Sunday is day 1
 	godz = hour(now());					//the hour now  (0-23)
 	//Ustawienie temperatury sterowania
-	if (Tryb_Sterownika == 0){			//Tryb AUTO,  temperatura w zmiennej SetTempActual ustawianay tylko jeśli różna od zadanej w SetTempSchedule
+	if (Tryb_Sterownika == 0){			//Tryb AUTO,  temperatura w zmiennej SetTempActual ustawiana tylko jeśli różna od zadanej w SetTempSchedule
 		if(SetTempActual != SetTempSchedule[dzien][godz]){
 			SetTempActual = SetTempSchedule[dzien][godz]; 
 			}
 		}
-	else if (Tryb_Sterownika == 1) {		//Tryb ON,  temperatura w zmiennej SetTempActual ustawianay tylko jeśli różna od zadanej w SetTempSchedule
+	else if (Tryb_Sterownika == 1) {		//Tryb ON,  temperatura w zmiennej SetTempActual ustawiana tylko jeśli różna od zadanej w SetTempSchedule
 		if(SetTempActual != temp){
 		SetTempActual = temp;
 		}
 	}
-	else if (Tryb_Sterownika == 2) {		//Tryb OFF,  temperatura w zmiennej SetTempActual ustawianay tylko jeśli różna od 0 (zera)
+	else if (Tryb_Sterownika == 2) {		//Tryb OFF,  temperatura w zmiennej SetTempActual ustawiana tylko jeśli różna od 0 (zera)
 		if(SetTempActual != 0) {
 		SetTempActual = 0;
 		}
 	}
-	else if(Tryb_Sterownika == 3) {			//Tryb MAN,  temperatura w zmiennej SetTempActual ustawianay tylko jeśli różna od zadanej w SetTempManual
+	else if(Tryb_Sterownika == 3) {			//Tryb MAN,  temperatura w zmiennej SetTempActual ustawiana tylko jeśli różna od zadanej w SetTempManual
 		if(SetTempActual != SetTempManual){
 		SetTempActual = SetTempManual;
 		}
@@ -277,62 +277,97 @@ float ReadSoilMoisture() {		//Odczyt z czujnika wilgotności gleby i konwersja d
 
 void Room_Temp_Control() {		//Sterowanie piecem w zależności od temperatury
 	if (Tryb_Sterownika == 1) {
-		bridge1.digitalWrite(HeatCO, 0);	//Wysłąnie sygnały do włączenia pieca
+		bridge1.digitalWrite(HeatCO, 0);	//Wysłanie sygnału do włączenia pieca
 		LED_CO.on();				//Piec CO grzeje
 		digitalWrite(BUILTIN_LED, LOW);		//Niebieska dioda WEMOSA gaśnie
 	}
 	else if (temp < SetTempActual - TemtHist) {
-		bridge1.digitalWrite(HeatCO, 0);	//Wysłąnie sygnały do włączenia pieca
+		bridge1.digitalWrite(HeatCO, 0);	//Wysłanie sygnału do włączenia pieca
 		LED_CO.on();				//Piec CO grzeje
 		digitalWrite(BUILTIN_LED, LOW);		//Niebieska dioda WEMOSA gaśnie
 	}
 	else if (temp > SetTempActual + TemtHist) {
-		bridge1.digitalWrite(HeatCO, 1023);	//Wysłąnie sygnały do wyłączenia pieca (1023 bo piny obsługują PWM i nadanie "1" nie działa)
+		bridge1.digitalWrite(HeatCO, 1023);	//Wysłanie sygnału do wyłączenia pieca (1023 bo piny obsługują PWM i nadanie "1" nie działa)
 		LED_CO.off();				//Piec CO nie grzeje
 		digitalWrite(BUILTIN_LED, HIGH);	//Niebieska dioda WEMOSA świeci
 	}
 }
 
 void Wyslij_Dane() {			//Wysyłanie danych na serwer Blynka
-	Blynk.virtualWrite(V0, temp);				//Temperatura [deg C]
+	Blynk.virtualWrite(V0, temp);				//Temperatura [°C]
 	Blynk.virtualWrite(V1, hum);				//Wilgotność [%]
 	Blynk.virtualWrite(V2, pres);				//Ciśnienie [hPa]
-	Blynk.virtualWrite(V3, dewPoint);			//Temperatura punktu rosy [deg C]
+	Blynk.virtualWrite(V3, dewPoint);			//Temperatura punktu rosy [°C]
 	Blynk.virtualWrite(V4, absHum);				//Wilgotność bezwzględna [g/m³]
-	Blynk.virtualWrite(V5, heatIndex);			//Temperatura odczuwalna [deg C] 
+	Blynk.virtualWrite(V5, heatIndex);			//Temperatura odczuwalna [°C] 
 	Blynk.virtualWrite(V6, RH);				//Wilgotność gleby [%]  
-	Blynk.virtualWrite(V18, SetTempActual);			//Temperatura zadana [deg C]
+	Blynk.virtualWrite(V18, SetTempActual);			//Temperatura zadana [°C]
 	Blynk.virtualWrite(V25, map(WiFi.RSSI(), -105, -40, 0, 100) ); //Siła sygnału Wi-Fi [%]
-	bridge1.virtualWrite(V21, hum);				//Wilgotność w pokoju wysyłana do sterownika w łazience [%]      
+	bridge1.virtualWrite(V21, hum);				//Wilgotność w pokoju wysyłana do sterownika w łazience [%]
 	//TESTOWANIE TYMCZOSOWE
 	Blynk.virtualWrite(V30, CZAS_START_MANUAL); 
 	Blynk.virtualWrite(V31, CZAS_START_AUTO); 
 }
 
-BLYNK_WRITE(V40) {			//Obsluga terminala
-	if (String("Ports") == param.asStr()) {
+BLYNK_WRITE(V40) {	//Obsługa terminala
+	String TerminalCommand = param.asStr();
+	TerminalCommand.toLowerCase();
+
+	if (String("ports") == TerminalCommand) {
 		terminal.clear();
-		terminal.println("Port      Description        Type");
-		terminal.println("V0        Temperature        Value");
-		terminal.println("V1        Humdity            Value");
-		terminal.println("V2        Pressure           Value");
-		terminal.println("V3        DewPoint           Value");
-		terminal.println("V4        Abs Humdity        Value");
-		terminal.println("V5        Heat Index         Value");
-		terminal.println("V6        Soil Moisture      Value");
-		terminal.println("V25       WiFi Signal        Value");
-		terminal.println("V40       Terminal           Terminal");
+		terminal.println("PORT     DESCRIPTION        UNIT");
+		terminal.println("V0   ->  Temperature        °C");
+		terminal.println("V1   ->  Humdity            %");
+		terminal.println("V2   ->  Pressure           HPa");
+		terminal.println("V3   ->  DewPoint           °C");
+		terminal.println("V4   ->  Abs Humdity        g/m3");
+		terminal.println("V5   ->  Heat Index         °C");
+		terminal.println("V6   ->  Wilgotność gleby   %");
+		terminal.println("V10  <-  OLED_ON            1/0");
+		terminal.println("V11  <-  Tryb_Sterownika    1,2,3,4");
+		terminal.println("V12  <-  SetTempManual      °C");
+		terminal.println("V13  <-  BLYNK Timer        sec");
+		terminal.println("V25  ->  WiFi Signal        %");
+		terminal.println("V40 <->  Terminal           String");
 	}
-	else if (String("Hello") == param.asStr()) {
+	else if (String("values") == TerminalCommand) {
 		terminal.clear();
-		terminal.println("Hi Lukasz. Have a great day!");
+		terminal.println("PORT   DATA              VALUE");
+		terminal.print("V0     Temperature   =   ");
+		terminal.print(temp);
+		terminal.println(" °C");
+		terminal.print("V1     Humdity       =   ");
+		terminal.print(hum);
+		terminal.println(" %");
+		terminal.print("V2     Pressure      =   ");
+		terminal.print(pres);
+		terminal.println(" HPa");
+		terminal.print("V3     DewPoint      =   ");
+		terminal.print(dewPoint);
+		terminal.println(" °C");
+		terminal.print("V4     Abs Humdity   =   ");
+		terminal.print(absHum);
+		terminal.println(" g/m3");
+		terminal.print("V5     Heat Index    =   ");
+		terminal.print(heatIndex);
+		terminal.println(" °C");
+		terminal.print("V10    OLED_ON       =   ");
+		terminal.print(OLED_ON);
+		terminal.println(" ");
+		terminal.print("V25    WiFi Signal   =   ");
+		terminal.print(map(WiFi.RSSI(), -105, -40, 0, 100));
+		terminal.println(" %");
+	}
+	else if (String("hello") == TerminalCommand) {
+		terminal.clear();
+		terminal.println("Hi Łukasz. Have a great day!");
 	}
 	else {
-	terminal.clear();
-		terminal.println("Type 'Ports' to show list") ;
-		terminal.println("or 'Hello' to say hello!") ;
+		terminal.clear();
+		terminal.println("Type 'PORTS' to show list") ;
+		terminal.println("Type 'VALUES' to show list") ;
+		terminal.println("or 'HELLO' to say hello!") ;
 	}
-
 	// Ensure everything is sent
 	terminal.flush();
 }
@@ -434,13 +469,13 @@ void setup() {
 	Wire.begin();
 
 	//Ustawianie pinów
-	pinMode(BUILTIN_LED, OUTPUT);					//Będzie mrógał diodą
+	pinMode(BUILTIN_LED, OUTPUT);					//Będzie mrugał diodą
 
 	//inicjowanie wyświetlacza
 	u8g2.begin();
 	u8g2.enableUTF8Print();
 	u8g2.setDisplayRotation(U8G2_R0);
-	u8g2.setFlipMode(1);						//Odwrócenie ekrany o 180stopnie jeśli parapetr = 1
+	u8g2.setFlipMode(1);						//Odwrócenie ekrany o 180 stopnie jeśli parametr = 1
 
 	u8g2.clearBuffer();
 	u8g2.setFontMode(1);

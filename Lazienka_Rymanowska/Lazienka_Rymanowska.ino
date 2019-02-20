@@ -27,8 +27,8 @@ WidgetTerminal terminal(V40);				//Attach virtual serial terminal to Virtual Pin
 #include <SimpleTimer.h>
 SimpleTimer TimerBlynkCheck;				//Do sprawdzana połączenia z Blynkiem uruchamiany do 30s
 SimpleTimer TimerMainFunction;				//dla MainFunction uruchamiany do 3s
-SimpleTimer TimerSedes;					//dla illuminacji sedesu
-int timerID;						//Przedtrzymuje ID Timera
+SimpleTimer TimerSedes;					//dla iluminacji sedesu
+int timerID;						//Przetrzymuje ID Timera
 
 float		SetHumid		= 75;		//Wilgotności przy której załączy się wentylator w trybie manualnym
 float		SetHumidAuto		= 75;		//Wilgotności przy której załączy się wentylator w trybie automatycznym
@@ -36,18 +36,18 @@ float		RoomHumid		= 0;		//Wilgotności w pokoju, potrzebna do wysnaczenie watro�
 int		Fan_Manual		= 0;		//Manualne włączenie wentylatora
 int		Fan_State		= 0;
 int		PhotoResValue		= 0;		//Store value from photoresistor (0-1023)
-int		ProgPhotoresistor	= 450;		//Próg jasności od którego zacznie działać illuminacja sedesu (nie powino podświetlać jeśli światło w łazience zapalone)
+int		ProgPhotoresistor	= 450;		//Próg jasności od którego zacznie działać iluminacja sedesu (nie powinno podświetlać jeśli światło w łazience zapalone)
 float temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);
 
 //STAŁE
 const char	ssid[]			= "XXXX";
 const char	pass[]			= "XXXX";
 const char	auth[]			= "XXXX";	//Token Łazienka Rymanowska
-const int	checkInterval		= 30000;	//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwererem Blynk
+const int	checkInterval		= 30000;	//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
 const int	BathFan			= D5;		//Deklaracja pinu na który zostanie wysłany sygnał załączenia wentylatora
 const int	Piec_CO			= D6;		//Deklaracja pinu na którym będzie włączany piec CO
 const int	PIR_Sensor		= D7;		//Deklaracja pinu z sensorem ruchu AM312
-const int	LED_Light		= D8;		//Deklaracja pinu z MOSFETem do illuminacji sedesu
+const int	LED_Light		= D8;		//Deklaracja pinu z MOSFETem do iluminacji sedesu
 const int	PhotoResistor		= A0;		//Deklaracja pinu z sensorem światła
 const float	HumidHist		= 4;		//histereza dla wilgotności
 
@@ -131,7 +131,7 @@ void OTA_Handle() {			//Deklaracja OTA_Handle:
 
 void MainFunction() {			//Robi wszystko co powinien
 	Read_BME280_Values();			//Odczyt danych z czujnika BME280
-	Bathrum_Humidity_Control();		//Włącza wentylator jeśli wigotnośc przekracza próg ale Piec CO jest wyłączony
+	Bathrum_Humidity_Control();		//Włącza wentylator jeśli wilgotność przekracza próg ale Piec CO jest wyłączony
 	Wyslij_Dane();				//Wysyła dane do serwera Blynk
 }
 
@@ -183,40 +183,73 @@ void Read_BME280_Values() {		//Odczyt wskazań z czujnika BME280
 }
 
 void Wyslij_Dane() {			//Wysyła dane na serwer Blynk
-	Blynk.virtualWrite(V0, temp);			//Temperatura [ged C]
+	Blynk.virtualWrite(V0, temp);			//Temperatura [°C]
 	Blynk.virtualWrite(V1, hum);			//Wilgotność [%]
 	Blynk.virtualWrite(V2, pres);			//Ciśnienie [hPa]
-	Blynk.virtualWrite(V3, dewPoint);		//Temperatura punktu rosy [deh C]
+	Blynk.virtualWrite(V3, dewPoint);		//Temperatura punktu rosy [°C]
 	Blynk.virtualWrite(V4, absHum);			//Wilgotność bezwzględna [g/m³]
-	Blynk.virtualWrite(V5, heatIndex);		//Temperatura odczuwalna [deh C]
+	Blynk.virtualWrite(V5, heatIndex);		//Temperatura odczuwalna [°C]
 	Blynk.virtualWrite(V6, SetHumidAuto);		//Wilgotności przy której załączy się wentylator w trybie automatycznym [%] 
 
 	Blynk.virtualWrite(V25, map(WiFi.RSSI(), -105, -40, 0, 100) );	//Przesyła siłę sygnału Wi-Fi [%]
 }
 
-BLYNK_WRITE(V40) {			//Obsluga terminala
-	if (String("Ports") == param.asStr()) {
+BLYNK_WRITE(V40) {	//Obsługa terminala
+	String TerminalCommand = param.asStr();
+	TerminalCommand.toLowerCase();
+
+	if (String("ports") == TerminalCommand) {
 		terminal.clear();
-		terminal.println("Port      Description        Type");
-		terminal.println("V0        Temperature        Value");
-		terminal.println("V1        Humdity            Value");
-		terminal.println("V2        Pressure           Value");
-		terminal.println("V3        DewPoint           Value");
-		terminal.println("V4        Abs Humdity        Value");
-		terminal.println("V5        Heat Index         Value");
-		terminal.println("V25       WiFi Signal        Value");
-		terminal.println("V40       Terminal           Terminal");
+		terminal.println("PORT     DESCRIPTION        UNIT");
+		terminal.println("V0   ->  Temperature        °C");
+		terminal.println("V1   ->  Humdity            %");
+		terminal.println("V2   ->  Pressure           HPa");
+		terminal.println("V3   ->  DewPoint           °C");
+		terminal.println("V4   ->  Abs Humdity        g/m3");
+		terminal.println("V5   ->  Heat Index         °C");
+		terminal.println("V10  <-  SetHumid           %");
+		terminal.println("V11  <-  Fan Manual & State 1,2,3,4");
+		terminal.println("V25  ->  WiFi Signal        %");
+		terminal.println("V40 <->  Terminal           String");
 	}
-	else if (String("Hello") == param.asStr()) {
+	else if (String("values") == TerminalCommand) {
 		terminal.clear();
-		terminal.println("Hi Lukasz. Have a great day!");
+		terminal.println("PORT   DATA              VALUE");
+		terminal.print("V0     Temperature   =   ");
+		terminal.print(temp);
+		terminal.println(" °C");
+		terminal.print("V1     Humdity       =   ");
+		terminal.print(hum);
+		terminal.println(" %");
+		terminal.print("V2     Pressure      =   ");
+		terminal.print(pres);
+		terminal.println(" HPa");
+		terminal.print("V3     DewPoint      =   ");
+		terminal.print(dewPoint);
+		terminal.println(" °C");
+		terminal.print("V4     Abs Humdity   =   ");
+		terminal.print(absHum);
+		terminal.println(" g/m3");
+		terminal.print("V5     Heat Index    =   ");
+		terminal.print(heatIndex);
+		terminal.println(" °C");
+		terminal.print("V10    SetHumid  =   ");
+		terminal.print(SetHumid );
+		terminal.println(" %");
+		terminal.print("V25    WiFi Signal   =   ");
+		terminal.print(map(WiFi.RSSI(), -105, -40, 0, 100));
+		terminal.println(" %");
+	}
+	else if (String("hello") == TerminalCommand) {
+		terminal.clear();
+		terminal.println("Hi Łukasz. Have a great day!");
 	}
 	else {
-	terminal.clear();
-		terminal.println("Type 'Ports' to show list") ;
-		terminal.println("or 'Hello' to say hello!") ;
+		terminal.clear();
+		terminal.println("Type 'PORTS' to show list") ;
+		terminal.println("Type 'VALUES' to show list") ;
+		terminal.println("or 'HELLO' to say hello!") ;
 	}
-
 	// Ensure everything is sent
 	terminal.flush();
 }
@@ -232,7 +265,7 @@ BLYNK_WRITE(V21) {			//Wilgotność w pokoju, przesyłana z Wemos D1
 
 BLYNK_WRITE(V11) {			//Sterowanie wentylatorem z aplikacji
 	switch (param.asInt()){
-		case 1:					//Ogrzewanie w trybie automatycznym na podstaiw charmonogramu SetTemp
+		case 1:					//Ogrzewanie w trybie automatycznym na podstawie harmonogramu SetTemp
 			Fan_Manual = 0;
 			Fan_State = 0;
 			break;
@@ -274,8 +307,8 @@ void setup() {
 	digitalWrite(Piec_CO, HIGH);			//Domyślnie wyłączony (stan wysoki HIGH)
 	pinMode(PIR_Sensor, INPUT);			//Deklaracja pinu z sensorem ruchu AM312
 
-	pinMode(LED_Light, OUTPUT);			//Deklaracja pinu z MOSFETem do illuminacji sedesu
-	SedesDimmer.begin(LED_Light,HIGH);		//Deklaracja pinu z MOSFETem do illuminacji sedesu
+	pinMode(LED_Light, OUTPUT);			//Deklaracja pinu z MOSFETem do iluminacji sedesu
+	SedesDimmer.begin(LED_Light,HIGH);		//Deklaracja pinu z MOSFETem do iluminacji sedesu
 	SedesDimmer.setFadingTime(1000);
 	SedesDimmer.setBrighteningTime(1000);
 
@@ -302,12 +335,12 @@ void loop() {
 		TimerSedes.restartTimer(timerID);		//Wydłuża illuminacje sedesu o kolejne 30s
 	}
 	else if (!TimerSedes.isEnabled(timerID) && digitalRead(PIR_Sensor) == 1 && analogRead(PhotoResistor) < ProgPhotoresistor) {		//Returns true if the specified timer is enabled
-		SedesDimmer.on();				//Włącza illuminację sedesu
-		timerID = TimerSedes.setTimeout(20000, SedesIlluminationOFF);									//Wyłączy illuminacje sedesu za 30s
+		SedesDimmer.on();				//Włącza iluminację sedesu
+		timerID = TimerSedes.setTimeout(20000, SedesIlluminationOFF);									//Wyłączy iluminacje sedesu za 30s
 	}
 	else if ( TimerSedes.isEnabled(timerID) && analogRead(PhotoResistor) > ProgPhotoresistor) {						//Returns true if the specified timer is enabled
 		TimerSedes.deleteTimer(timerID);		//Wyłącza Timer 
-		SedesIlluminationOFF();				//Wyłącza illuminację sedesu
+		SedesIlluminationOFF();				//Wyłącza iluminację sedesu
 	}
 
 	if (Blynk.connected()) Blynk.run();
@@ -316,11 +349,11 @@ void loop() {
 void handleInterrupt() {		//Obsługa przerwań wywoływanych przez czujnik PIR AM312
 	if ( !TimerSedes.isEnabled(timerID) && analogRead(PhotoResistor) < ProgPhotoresistor ) {	//Returns true if the specified timer is enabled
 		SedesDimmer.on();
-		timerID = TimerSedes.setTimeout(10000, SedesIlluminationOFF);				//Wyłączy illuminacje sedesu za 30s
+		timerID = TimerSedes.setTimeout(10000, SedesIlluminationOFF);				//Wyłączy iluminacje sedesu za 30s
 	}
 }
 
-void SedesIlluminationOFF() {		//Powolne wygaszenie illuminacji sedesu, czas 0.5s
+void SedesIlluminationOFF() {		//Powolne wygaszenie iluminacji sedesu, czas 0.5s
 	SedesDimmer.off();
 	Serial.println("Illuminacja wyłączona");
 }
