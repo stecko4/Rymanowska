@@ -191,7 +191,7 @@ void Wyslij_Dane() {			//Wysyła dane na serwer Blynk
 	Blynk.virtualWrite(V5, heatIndex);		//Temperatura odczuwalna [°C]
 	Blynk.virtualWrite(V6, SetHumidAuto);		//Wilgotności przy której załączy się wentylator w trybie automatycznym [%] 
 
-	Blynk.virtualWrite(V25, map(WiFi.RSSI(), -105, -40, 0, 100) );	//Przesyła siłę sygnału Wi-Fi [%]
+	Blynk.virtualWrite(V25, constrain(map(WiFi.RSSI(), -105, -40, 0, 100), 0, 100)); //Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
 }
 
 BLYNK_WRITE(V40) {	//Obsługa terminala
