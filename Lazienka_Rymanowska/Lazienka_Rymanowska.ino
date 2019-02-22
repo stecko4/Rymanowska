@@ -6,18 +6,18 @@ Gnd (Ground)        ->  Gnd
 SDA (Serial Data)   ->  D2 on NodeMCU / Wemos D1 PRO
 SCK (Serial Clock)  ->  D1 on NodeMCU / Wemos D1 PRO */
 
-//for OTA
-#include <ESP8266mDNS.h>
-#include <WiFiUdp.h>
-#include <ArduinoOTA.h>
-bool OTAConfigured = 0;
-
 //BME280 definition and Mutichannel_Gas_Sensor
 #include <EnvironmentCalculations.h>
 #include <Wire.h>
 #include "cactus_io_BME280_I2C.h"
 //Create BME280 object
 BME280_I2C bme(0x76);			//I2C using address 0x76
+
+//for OTA
+#include <ESP8266mDNS.h>
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
+bool OTAConfigured = 0;
 
 //#define BLYNK_DEBUG			//Optional, this enables lots of prints
 //#define BL+YNK_PRINT Serial
@@ -54,32 +54,66 @@ const float	HumidHist		= 4;		//histereza dla wilgotności
 #include <LightDimmer.h>				//Rozjaśnianie i przygasanie PWMem
 LightDimmer SedesDimmer;				//Deklaracja do rozjaśniania i ściemniania
 
-BLYNK_CONNECTED() {			//Informacja że połączono z serwerem Blynk, synchronizacja danych
+BLYNK_CONNECTED()			//Informacja że połączono z serwerem Blynk, synchronizacja danych
+{
 	Serial.println("Reconnected, syncing with cloud.");
 	Blynk.syncAll();
 }
 
-void blynkCheck() {			//Sprawdza czy połączone z serwerem Blynk
-	if (WiFi.status() == 3) {
-		if (!Blynk.connected()) {
+void blynkCheck()			//Sprawdza czy połączone z serwerem Blynk
+{
+	if (WiFi.status() == WL_CONNECTED)		//WL_CONNECTED: assigned when connected to a WiFi network
+	{
+		if (!Blynk.connected())
+		{
 			Serial.println("WiFi OK, trying to connect to the Blynk server...");
 			Blynk.connect();
 		}
 	}
 
-	if (WiFi.status() == 1) {
+	if (WiFi.status() == WL_NO_SSID_AVAIL)		//WL_NO_SSID_AVAIL: assigned when no SSID are available
+	{
 		Serial.println("No WiFi connection, offline mode.");
+	}
+
+	if (WiFi.status() == WL_IDLE_STATUS)		//WL_IDLE_STATUS is a temporary status assigned when WiFi.begin() is called and remains active until the number of attempts expires (resulting in WL_CONNECT_FAILED) or a connection is established (resulting in WL_CONNECTED)
+	{
+		Serial.println("WL_IDLE_STATUS: WiFi.begin() is called");
+	}
+
+	if (WiFi.status() == WL_SCAN_COMPLETED)		//WL_SCAN_COMPLETED: assigned when the scan networks is completed
+	{
+		Serial.println("WL_SCAN_COMPLETED: networks is completed");
+	}
+
+	if (WiFi.status() == WL_CONNECT_FAILED)		//WL_CONNECT_FAILED: assigned when the connection fails for all the attempts
+	{
+		Serial.println("WL_CONNECT_FAILED: connection fails for all the attempts");
+	}
+
+	if (WiFi.status() == WL_CONNECTION_LOST)	//WL_CONNECTION_LOST: assigned when the connection is lost
+	{
+		Serial.println("WL_CONNECTION_LOST: the connection is lost");
+	}
+
+	if (WiFi.status() == WL_DISCONNECTED)		//WL_DISCONNECTED: assigned when disconnected from a network
+	{
+		Serial.println("WL_DISCONNECTED: disconnected from a network");
 	}
 }
 
-void OTA_Handle() {			//Deklaracja OTA_Handle:
-	if (OTAConfigured == 1) {
+void OTA_Handle()			//Deklaracja OTA_Handle:
+{
+	if (OTAConfigured == 1)
+	{
 		if (WiFi.waitForConnectResult() == WL_CONNECTED) {
 			ArduinoOTA.handle();
 		}
 	}
-	else {
-		if (WiFi.waitForConnectResult() == WL_CONNECTED) {
+	else
+	{
+		if (WiFi.waitForConnectResult() == WL_CONNECTED)
+		{
 			// Port defaults to 8266
 			// ArduinoOTA.setPort(8266);
 
@@ -129,47 +163,59 @@ void OTA_Handle() {			//Deklaracja OTA_Handle:
 	}
 }
 
-void MainFunction() {			//Robi wszystko co powinien
+void MainFunction()			//Robi wszystko co powinien
+{
 	Read_BME280_Values();			//Odczyt danych z czujnika BME280
 	Bathrum_Humidity_Control();		//Włącza wentylator jeśli wilgotność przekracza próg ale Piec CO jest wyłączony
 	Wyslij_Dane();				//Wysyła dane do serwera Blynk
 }
 
-void Bathrum_Humidity_Control() {	//Załączanie wentylatora w łazience jeśji warunek spełnionyBathFan_Value
-	if (Fan_Manual == 0){
-		if (hum >= SetHumidAuto + HumidHist) {		//Jeśli wilgotność w pokoju + 15% + HumidHist
-			digitalWrite(BathFan, LOW);			//turn on relay with voltage LOW
-			Blynk.virtualWrite(V8, 255);			//Wentylator włączony
+void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśji warunek spełnionyBathFan_Value
+{
+	if (Fan_Manual == 0)
+	{
+		if (hum >= SetHumidAuto + HumidHist)		//Jeśli wilgotność w pokoju + 15% + HumidHist
+		{
+			digitalWrite(BathFan, LOW);		//turn on relay with voltage LOW
+			Blynk.virtualWrite(V8, 255);		//Wentylator włączony
 		}
-		else if (hum <= SetHumidAuto - HumidHist) {		//Jeśli wilgotność w pokoju - 15% + HumidHist
-			digitalWrite(BathFan, HIGH);			//turn on relay with voltage HIGH
-			Blynk.virtualWrite(V8, 0);			//Wentylator Wyłączony
+		else if (hum <= SetHumidAuto - HumidHist)	//Jeśli wilgotność w pokoju - 15% + HumidHist
+		{
+			digitalWrite(BathFan, HIGH);		//turn on relay with voltage HIGH
+			Blynk.virtualWrite(V8, 0);		//Wentylator Wyłączony
 		}
 	}
 	
-	else if (Fan_Manual == 1) {
-		if (Fan_State == 1) {
-			digitalWrite(BathFan, LOW);			//turn on relay with voltage LOW
-			Blynk.virtualWrite(V8, 255);			//Wentylator Wyłączony
+	else if (Fan_Manual == 1)
+	{
+		if (Fan_State == 1)
+		{
+			digitalWrite(BathFan, LOW);		//turn on relay with voltage LOW
+			Blynk.virtualWrite(V8, 255);		//Wentylator Wyłączony
 		}
-		else if (Fan_State == 0) {
-			digitalWrite(BathFan, HIGH);			//turn on relay with voltage HIGH
-			Blynk.virtualWrite(V8, 0);			//Wentylator włączony
+		else if (Fan_State == 0)
+		{
+			digitalWrite(BathFan, HIGH);		//turn on relay with voltage HIGH
+			Blynk.virtualWrite(V8, 0);		//Wentylator włączony
 		}
-		else if (Fan_State == 2) {
-			if (hum >= SetHumid + HumidHist) {
-				digitalWrite(BathFan, LOW);		//turn on relay with voltage LOW
-				Blynk.virtualWrite(V8, 255);		//Wentylator Wyłączony
+		else if (Fan_State == 2)
+		{
+			if (hum >= SetHumid + HumidHist)
+			{
+				digitalWrite(BathFan, LOW);	//turn on relay with voltage LOW
+				Blynk.virtualWrite(V8, 255);	//Wentylator Wyłączony
 			}
-			else if (hum <= SetHumid - HumidHist) {
-				digitalWrite(BathFan, HIGH);		//turn on relay with voltage HIGH
-				Blynk.virtualWrite(V8, 0);		//Wentylator włączony
+			else if (hum <= SetHumid - HumidHist)
+			{
+				digitalWrite(BathFan, HIGH);	//turn on relay with voltage HIGH
+				Blynk.virtualWrite(V8, 0);	//Wentylator włączony
 			}
 		}
 	}
 }
 
-void Read_BME280_Values() {		//Odczyt wskazań z czujnika BME280
+void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
+{
 	bme.readSensor(); 		//Odczyt wskazań z czujnika BME280
 	pres = bme.getPressure_MB();
 	hum = bme.getHumidity();
@@ -182,7 +228,8 @@ void Read_BME280_Values() {		//Odczyt wskazań z czujnika BME280
 	heatIndex = EnvironmentCalculations::HeatIndex(temp, hum, envTempUnit);
 }
 
-void Wyslij_Dane() {			//Wysyła dane na serwer Blynk
+void Wyslij_Dane()			//Wysyła dane na serwer Blynk
+{
 	Blynk.virtualWrite(V0, temp);			//Temperatura [°C]
 	Blynk.virtualWrite(V1, hum);			//Wilgotność [%]
 	Blynk.virtualWrite(V2, pres);			//Ciśnienie [hPa]
@@ -194,11 +241,13 @@ void Wyslij_Dane() {			//Wysyła dane na serwer Blynk
 	Blynk.virtualWrite(V25, constrain(map(WiFi.RSSI(), -105, -40, 0, 100), 0, 100)); //Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
 }
 
-BLYNK_WRITE(V40) {	//Obsługa terminala
+BLYNK_WRITE(V40)			//Obsługa terminala
+{
 	String TerminalCommand = param.asStr();
 	TerminalCommand.toLowerCase();
 
-	if (String("ports") == TerminalCommand) {
+	if (String("ports") == TerminalCommand)
+	{
 		terminal.clear();
 		terminal.println("PORT     DESCRIPTION        UNIT");
 		terminal.println("V0   ->  Temperature        °C");
@@ -212,7 +261,8 @@ BLYNK_WRITE(V40) {	//Obsługa terminala
 		terminal.println("V25  ->  WiFi Signal        %");
 		terminal.println("V40 <->  Terminal           String");
 	}
-	else if (String("values") == TerminalCommand) {
+	else if (String("values") == TerminalCommand)
+	{
 		terminal.clear();
 		terminal.println("PORT   DATA              VALUE");
 		terminal.print("V0     Temperature   =   ");
@@ -237,14 +287,16 @@ BLYNK_WRITE(V40) {	//Obsługa terminala
 		terminal.print(SetHumid );
 		terminal.println(" %");
 		terminal.print("V25    WiFi Signal   =   ");
-		terminal.print(map(WiFi.RSSI(), -105, -40, 0, 100));
+		terminal.print(constrain(map(WiFi.RSSI(), -105, -40, 0, 100), 0, 100));
 		terminal.println(" %");
 	}
-	else if (String("hello") == TerminalCommand) {
+	else if (String("hello") == TerminalCommand)
+	{
 		terminal.clear();
 		terminal.println("Hi Łukasz. Have a great day!");
 	}
-	else {
+	else
+	{
 		terminal.clear();
 		terminal.println("Type 'PORTS' to show list") ;
 		terminal.println("Type 'VALUES' to show list") ;
@@ -254,16 +306,19 @@ BLYNK_WRITE(V40) {	//Obsługa terminala
 	terminal.flush();
 }
 
-BLYNK_WRITE(V10) {			//Ustawienie progu wilgotności powyżej którego włączy się wentylator (plus próg)
+BLYNK_WRITE(V10)			//Ustawienie progu wilgotności powyżej którego włączy się wentylator (plus próg)
+{
 	SetHumid = param.asInt(); 
 }
 
-BLYNK_WRITE(V21) {			//Wilgotność w pokoju, przesyłana z Wemos D1
+BLYNK_WRITE(V21)			//Wilgotność w pokoju, przesyłana z Wemos D1
+{
 	RoomHumid = param.asInt();
 	SetHumidAuto = RoomHumid + 15;
 }
 
-BLYNK_WRITE(V11) {			//Sterowanie wentylatorem z aplikacji
+BLYNK_WRITE(V11)			//Sterowanie wentylatorem z aplikacji
+{
 	switch (param.asInt()){
 		case 1:					//Ogrzewanie w trybie automatycznym na podstawie harmonogramu SetTemp
 			Fan_Manual = 0;
@@ -289,7 +344,8 @@ BLYNK_WRITE(V11) {			//Sterowanie wentylatorem z aplikacji
 
 /***********************************************************************************************/
 
-void setup() {
+void setup()
+{
 	Serial.begin(115200);
 	WiFi.begin(ssid, pass);
 	Blynk.config(auth);
@@ -316,7 +372,8 @@ void setup() {
 	attachInterrupt(digitalPinToInterrupt(PIR_Sensor), handleInterrupt, HIGH);	//Obsługa przerwań dla czujnika ruchu
 
 	//inicjowanie czujnika BME280
-	if (!bme.begin()) {
+	if (!bme.begin())
+	{
 		Serial.println("Could not find a valid BME280 sensor, check wiring!"); 
 		while (1);
 	}
@@ -324,21 +381,25 @@ void setup() {
 	bme.setTempCal(0.7);				//Temp was reading high so subtract 0.7 degree
 }
 
-void loop() {
+void loop()
+{
 	TimerBlynkCheck.run();
 	TimerMainFunction.run();
 	TimerSedes.run();
 	OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
 	LightDimmer::update();		//updates all FadeLed objects
 
-	if (TimerSedes.isEnabled(timerID) && digitalRead(PIR_Sensor) == 1 && analogRead(PhotoResistor) < ProgPhotoresistor) {			//Returns true if the specified timer is enabled
+	if (TimerSedes.isEnabled(timerID) && digitalRead(PIR_Sensor) == 1 && analogRead(PhotoResistor) < ProgPhotoresistor)			//Returns true if the specified timer is enabled
+	{
 		TimerSedes.restartTimer(timerID);		//Wydłuża illuminacje sedesu o kolejne 30s
 	}
-	else if (!TimerSedes.isEnabled(timerID) && digitalRead(PIR_Sensor) == 1 && analogRead(PhotoResistor) < ProgPhotoresistor) {		//Returns true if the specified timer is enabled
+	else if (!TimerSedes.isEnabled(timerID) && digitalRead(PIR_Sensor) == 1 && analogRead(PhotoResistor) < ProgPhotoresistor)		//Returns true if the specified timer is enabled
+	{
 		SedesDimmer.on();				//Włącza iluminację sedesu
 		timerID = TimerSedes.setTimeout(20000, SedesIlluminationOFF);									//Wyłączy iluminacje sedesu za 30s
 	}
-	else if ( TimerSedes.isEnabled(timerID) && analogRead(PhotoResistor) > ProgPhotoresistor) {						//Returns true if the specified timer is enabled
+	else if ( TimerSedes.isEnabled(timerID) && analogRead(PhotoResistor) > ProgPhotoresistor)						//Returns true if the specified timer is enabled
+	{
 		TimerSedes.deleteTimer(timerID);		//Wyłącza Timer 
 		SedesIlluminationOFF();				//Wyłącza iluminację sedesu
 	}
@@ -346,14 +407,17 @@ void loop() {
 	if (Blynk.connected()) Blynk.run();
 }
 
-void handleInterrupt() {		//Obsługa przerwań wywoływanych przez czujnik PIR AM312
-	if ( !TimerSedes.isEnabled(timerID) && analogRead(PhotoResistor) < ProgPhotoresistor ) {	//Returns true if the specified timer is enabled
+void handleInterrupt()			//Obsługa przerwań wywoływanych przez czujnik PIR AM312
+{
+	if ( !TimerSedes.isEnabled(timerID) && analogRead(PhotoResistor) < ProgPhotoresistor )	//Returns true if the specified timer is enabled
+	{
 		SedesDimmer.on();
-		timerID = TimerSedes.setTimeout(10000, SedesIlluminationOFF);				//Wyłączy iluminacje sedesu za 30s
+		timerID = TimerSedes.setTimeout(10000, SedesIlluminationOFF);			//Wyłączy iluminacje sedesu za 30s
 	}
 }
 
-void SedesIlluminationOFF() {		//Powolne wygaszenie iluminacji sedesu, czas 0.5s
+void SedesIlluminationOFF()		//Powolne wygaszenie iluminacji sedesu, czas 0.5s
+{
 	SedesDimmer.off();
 	Serial.println("Illuminacja wyłączona");
 }
