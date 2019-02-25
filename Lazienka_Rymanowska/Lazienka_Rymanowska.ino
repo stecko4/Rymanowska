@@ -216,8 +216,8 @@ void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśji w
 
 void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 {
-	bme.readSensor(); 		//Odczyt wskazań z czujnika BME280
-	pres = bme.getPressure_MB();
+	bme.readSensor(); 				//Odczyt wskazań z czujnika BME280
+	pres = bme.getPressure_MB() + 24.634;		//Korekta dostosowująca do ciśnienia na poziomie moża
 	hum = bme.getHumidity();
 	temp = bme.getTemperature_C();
 	EnvironmentCalculations::AltitudeUnit envAltUnit  =  EnvironmentCalculations::AltitudeUnit_Meters;
@@ -295,12 +295,17 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.clear();
 		terminal.println("Hi Łukasz. Have a great day!");
 	}
+	else if (String("cls") == TerminalCommand)
+	{
+		terminal.clear();
+	}
 	else
 	{
 		terminal.clear();
-		terminal.println("Type 'PORTS' to show list") ;
-		terminal.println("Type 'VALUES' to show list") ;
-		terminal.println("or 'HELLO' to say hello!") ;
+		terminal.println("Type 'PORTS' to show list");
+		terminal.println("Type 'VALUES' to show sensor data");
+		terminal.println("Type 'CLS' to clear terminal");
+		terminal.println("or 'HELLO' to say hello!");
 	}
 	// Ensure everything is sent
 	terminal.flush();

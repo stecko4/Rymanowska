@@ -65,9 +65,9 @@ int		godz			= 1;		// the hour now (0-23)
 float		temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);	//Zmienne dla danych z czujnika BME280
 
 //STAŁE
-const char  ssid[]      = "XXXX";
-const char  pass[]      = "XXXX";
-const char  auth[]      = "XXXX"; //Token Pokój Rymanowska
+const char  ssid[]			= "XXXX";
+const char  pass[]			= "XXXX";
+const char  auth[]			= "XXXX";	//Token Pokój Rymanowska
 const int	checkInterval		= 30000;	//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
 const int	HeatCO			= D6;		//Pin do włączania CO w sterowniku w łazience
 const int	MinTemp			= 14;		//Najniższa możliwa temperatura do ustawienia
@@ -264,8 +264,8 @@ void TrybManAuto()			//Ustawienie trybów sterowania i temperatury do załączen
 
 void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 {
-	bme.readSensor();		//Odczyt wskazań z czujnika BME280
-	pres = bme.getPressure_MB();
+	bme.readSensor();				//Odczyt wskazań z czujnika BME280
+	pres = bme.getPressure_MB() + 24.634;		//Korekta dostosowująca do ciśnienia na poziomie moża
 	hum = bme.getHumidity();
 	temp = bme.getTemperature_C();
 	EnvironmentCalculations::AltitudeUnit envAltUnit  =  EnvironmentCalculations::AltitudeUnit_Meters;
@@ -471,12 +471,17 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.clear();
 		terminal.println("Hi Łukasz. Have a great day!");
 	}
+	else if (String("cls") == TerminalCommand)
+	{
+		terminal.clear();
+	}
 	else
 	{
 		terminal.clear();
-		terminal.println("Type 'PORTS' to show list") ;
-		terminal.println("Type 'VALUES' to show list") ;
-		terminal.println("or 'HELLO' to say hello!") ;
+		terminal.println("Type 'PORTS' to show list");
+		terminal.println("Type 'VALUES' to show sensor data");
+		terminal.println("Type 'CLS' to clear terminal");
+		terminal.println("or 'HELLO' to say hello!");
 	}
 	// Ensure everything is sent
 	terminal.flush();
