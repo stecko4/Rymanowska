@@ -20,21 +20,18 @@ BME280_I2C bme(0x76);			//I2C using address 0x76
 bool OTAConfigured = 0;
 
 //#define BLYNK_DEBUG			//Optional, this enables lots of prints
-//#define BL+YNK_PRINT Serial
+#define BLYNK_PRINT Serial
 #include <ESP8266WiFi.h>
 #include <BlynkSimpleEsp8266.h>
 WidgetTerminal terminal(V40);				//Attach virtual serial terminal to Virtual Pin V40
 #include <SimpleTimer.h>
-SimpleTimer TimerBlynkCheck;				//Do sprawdzana połączenia z Blynkiem uruchamiany do 30s
-SimpleTimer TimerMainFunction;				//dla MainFunction uruchamiany do 3s
-SimpleTimer TimerSedes;					//dla iluminacji sedesu
-int timerID;						//Przetrzymuje ID Timera
+SimpleTimer Timer;
 
-float		SetHumid		= 75;		//Wilgotności przy której załączy się wentylator w trybie manualnym
-float		SetHumidAuto		= 75;		//Wilgotności przy której załączy się wentylator w trybie automatycznym
-float		RoomHumid		= 0;		//Wilgotności w pokoju, potrzebna do wysnaczenie watrości wilgotności przy której ma się załączyć wentylator
-int		Fan_Manual		= 0;		//Manualne włączenie wentylatora
-int		Fan_State		= 0;
+int timerID;						//Przetrzymuje ID Timera
+int		Tryb_Sterownika		= 0;		//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
+float		SetHumidManual		= 75;		//Wilgotności przy której załączy się wentylator w trybie manualnym
+float		SetHumidActual		= 50;		//Wilgotności przy której załączy się wentylator
+float		RoomHumid		= 0;		//Wilgotności w pokoju, potrzebna do wyznaczenia wartości wilgotności przy której ma się załączyć wentylator
 int		PhotoResValue		= 0;		//Store value from photoresistor (0-1023)
 int		ProgPhotoresistor	= 450;		//Próg jasności od którego zacznie działać iluminacja sedesu (nie powinno podświetlać jeśli światło w łazience zapalone)
 float temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);
@@ -43,7 +40,6 @@ float temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN)
 const char	ssid[]			= "XXXX";
 const char	pass[]			= "XXXX";
 const char	auth[]			= "XXXX";	//Token Łazienka Rymanowska
-const int	checkInterval		= 30000;	//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
 const int	BathFan			= D5;		//Deklaracja pinu na który zostanie wysłany sygnał załączenia wentylatora
 const int	Piec_CO			= D6;		//Deklaracja pinu na którym będzie włączany piec CO
 const int	PIR_Sensor		= D7;		//Deklaracja pinu z sensorem ruchu AM312
@@ -67,7 +63,9 @@ void blynkCheck()			//Sprawdza czy połączone z serwerem Blynk
 		if (!Blynk.connected())
 		{
 			Serial.println("WiFi OK, trying to connect to the Blynk server...");
+			Serial.println("Blynk.connect() START");
 			Blynk.connect();
+			Serial.println("Blynk.connect() STOP");
 		}
 	}
 
@@ -166,58 +164,40 @@ void OTA_Handle()			//Deklaracja OTA_Handle:
 void MainFunction()			//Robi wszystko co powinien
 {
 	Read_BME280_Values();			//Odczyt danych z czujnika BME280
+	TrybManAuto();				//Ustawienie trybów sterowania wilgotnością
 	Bathrum_Humidity_Control();		//Włącza wentylator jeśli wilgotność przekracza próg ale Piec CO jest wyłączony
 	Wyslij_Dane();				//Wysyła dane do serwera Blynk
 }
 
-void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśji warunek spełnionyBathFan_Value
+void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli warunek spełnionyBathFan_Value
 {
-	if (Fan_Manual == 0)
+	if (Tryb_Sterownika == 2)		//Wilgotność w trybie ręcznym OFF
 	{
-		if (hum >= SetHumidAuto + HumidHist)		//Jeśli wilgotność w pokoju + 15% + HumidHist
-		{
-			digitalWrite(BathFan, LOW);		//turn on relay with voltage LOW
-			Blynk.virtualWrite(V8, 255);		//Wentylator włączony
-		}
-		else if (hum <= SetHumidAuto - HumidHist)	//Jeśli wilgotność w pokoju - 15% + HumidHist
-		{
-			digitalWrite(BathFan, HIGH);		//turn on relay with voltage HIGH
-			Blynk.virtualWrite(V8, 0);		//Wentylator Wyłączony
-		}
+		digitalWrite(BathFan, HIGH);		//turn on relay with voltage HIGH
+		Blynk.virtualWrite(V8, 0);		//Wentylator Wyłączony
 	}
-	
-	else if (Fan_Manual == 1)
+	else if (Tryb_Sterownika == 1)		//Wilgotność w trybie ręcznym ON
 	{
-		if (Fan_State == 1)
-		{
-			digitalWrite(BathFan, LOW);		//turn on relay with voltage LOW
-			Blynk.virtualWrite(V8, 255);		//Wentylator Wyłączony
-		}
-		else if (Fan_State == 0)
-		{
-			digitalWrite(BathFan, HIGH);		//turn on relay with voltage HIGH
-			Blynk.virtualWrite(V8, 0);		//Wentylator włączony
-		}
-		else if (Fan_State == 2)
-		{
-			if (hum >= SetHumid + HumidHist)
-			{
-				digitalWrite(BathFan, LOW);	//turn on relay with voltage LOW
-				Blynk.virtualWrite(V8, 255);	//Wentylator Wyłączony
-			}
-			else if (hum <= SetHumid - HumidHist)
-			{
-				digitalWrite(BathFan, HIGH);	//turn on relay with voltage HIGH
-				Blynk.virtualWrite(V8, 0);	//Wentylator włączony
-			}
-		}
+		digitalWrite(BathFan, LOW);		//turn on relay with voltage LOW
+		Blynk.virtualWrite(V8, 255);		//Wentylator włączony
 	}
+	else if (hum >= SetHumidActual + HumidHist)	
+	{
+		digitalWrite(BathFan, LOW);		//turn on relay with voltage LOW
+		Blynk.virtualWrite(V8, 255);		//Wentylator włączony
+	}
+	else if (hum <= SetHumidActual - HumidHist)		
+	{
+		digitalWrite(BathFan, HIGH);		//turn on relay with voltage HIGH
+		Blynk.virtualWrite(V8, 0);		//Wentylator Wyłączony
+	}
+
 }
 
 void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 {
-	bme.readSensor(); 				//Odczyt wskazań z czujnika BME280
-	pres = bme.getPressure_MB() + 24.634;		//Korekta dostosowująca do ciśnienia na poziomie moża
+	bme.readSensor(); 		//Odczyt wskazań z czujnika BME280
+	pres = bme.getPressure_MB();
 	hum = bme.getHumidity();
 	temp = bme.getTemperature_C();
 	EnvironmentCalculations::AltitudeUnit envAltUnit  =  EnvironmentCalculations::AltitudeUnit_Meters;
@@ -236,9 +216,44 @@ void Wyslij_Dane()			//Wysyła dane na serwer Blynk
 	Blynk.virtualWrite(V3, dewPoint);		//Temperatura punktu rosy [°C]
 	Blynk.virtualWrite(V4, absHum);			//Wilgotność bezwzględna [g/m³]
 	Blynk.virtualWrite(V5, heatIndex);		//Temperatura odczuwalna [°C]
-	Blynk.virtualWrite(V6, SetHumidAuto);		//Wilgotności przy której załączy się wentylator w trybie automatycznym [%] 
+	Blynk.virtualWrite(V6, SetHumidActual);		//Wilgotności przy której załączy się wentylator w trybie automatycznym [%] 
+	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); //Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
+}
 
-	Blynk.virtualWrite(V25, constrain(map(WiFi.RSSI(), -105, -40, 0, 100), 0, 100)); //Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
+void TrybManAuto()			//Ustawienie trybów sterowania wilgotnością
+{
+	switch (Tryb_Sterownika)
+	{
+		case 0:					//Wilgotność w trybie AUTO na podstawie wilgotności w pokoju + histereza
+			if (RoomHumid + 15 < 50)		//Wilgotność w trybie AUTO
+				{
+					SetHumidActual = 50;
+				}
+			else
+			{
+				SetHumidActual = RoomHumid + 15;
+			}
+			break;
+		case 1:					//Wilgotność w trybie ręcznym ON
+			SetHumidActual = hum;
+			break;
+		case 2:					//Wilgotność w trybie ręcznym OFF
+			SetHumidActual = 0;
+			break;
+		case 3:					//Wilgotność w trybie MANUAL z zadaną wilgotnością
+			SetHumidActual = SetHumidManual;
+			break;
+		default:		//Wartość domyślna AUTO
+			
+			SetHumidActual = RoomHumid + 15;
+			
+			break;
+	}
+}
+
+int WiFi_Strength (long Signal)		//Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
+{
+	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
 }
 
 BLYNK_WRITE(V40)			//Obsługa terminala
@@ -251,12 +266,12 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.clear();
 		terminal.println("PORT     DESCRIPTION        UNIT");
 		terminal.println("V0   ->  Temperature        °C");
-		terminal.println("V1   ->  Humdity            %");
+		terminal.println("V1   ->  Humidity           %");
 		terminal.println("V2   ->  Pressure           HPa");
 		terminal.println("V3   ->  DewPoint           °C");
-		terminal.println("V4   ->  Abs Humdity        g/m3");
+		terminal.println("V4   ->  Abs Humidity       g/m3");
 		terminal.println("V5   ->  Heat Index         °C");
-		terminal.println("V10  <-  SetHumid           %");
+		terminal.println("V10  <-  SetHumidManual     %");
 		terminal.println("V11  <-  Fan Manual & State 1,2,3,4");
 		terminal.println("V25  ->  WiFi Signal        %");
 		terminal.println("V40 <->  Terminal           String");
@@ -265,29 +280,29 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 	{
 		terminal.clear();
 		terminal.println("PORT   DATA              VALUE");
-		terminal.print("V0     Temperature   =   ");
+		terminal.print("V0     Temperature    =   ");
 		terminal.print(temp);
 		terminal.println(" °C");
-		terminal.print("V1     Humdity       =   ");
+		terminal.print("V1     Humidity       =   ");
 		terminal.print(hum);
 		terminal.println(" %");
-		terminal.print("V2     Pressure      =   ");
+		terminal.print("V2     Pressure       =   ");
 		terminal.print(pres);
 		terminal.println(" HPa");
-		terminal.print("V3     DewPoint      =   ");
+		terminal.print("V3     DewPoint       =   ");
 		terminal.print(dewPoint);
 		terminal.println(" °C");
-		terminal.print("V4     Abs Humdity   =   ");
+		terminal.print("V4     Abs Humidity   =   ");
 		terminal.print(absHum);
 		terminal.println(" g/m3");
-		terminal.print("V5     Heat Index    =   ");
+		terminal.print("V5     Heat Index     =   ");
 		terminal.print(heatIndex);
 		terminal.println(" °C");
-		terminal.print("V10    SetHumid  =   ");
-		terminal.print(SetHumid );
+		terminal.print("V10    SetHumidManual =   ");
+		terminal.print(SetHumidManual);
 		terminal.println(" %");
-		terminal.print("V25    WiFi Signal   =   ");
-		terminal.print(constrain(map(WiFi.RSSI(), -105, -40, 0, 100), 0, 100));
+		terminal.print("V25    WiFi Signal    =   ");
+		terminal.print(WiFi_Strength(WiFi.RSSI()));
 		terminal.println(" %");
 	}
 	else if (String("hello") == TerminalCommand)
@@ -295,17 +310,12 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.clear();
 		terminal.println("Hi Łukasz. Have a great day!");
 	}
-	else if (String("cls") == TerminalCommand)
-	{
-		terminal.clear();
-	}
 	else
 	{
 		terminal.clear();
-		terminal.println("Type 'PORTS' to show list");
-		terminal.println("Type 'VALUES' to show sensor data");
-		terminal.println("Type 'CLS' to clear terminal");
-		terminal.println("or 'HELLO' to say hello!");
+		terminal.println("Type 'PORTS' to show list") ;
+		terminal.println("Type 'VALUES' to show list") ;
+		terminal.println("or 'HELLO' to say hello!") ;
 	}
 	// Ensure everything is sent
 	terminal.flush();
@@ -313,37 +323,33 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 
 BLYNK_WRITE(V10)			//Ustawienie progu wilgotności powyżej którego włączy się wentylator (plus próg)
 {
-	SetHumid = param.asInt(); 
+	SetHumidManual = param.asInt(); 
 }
 
 BLYNK_WRITE(V21)			//Wilgotność w pokoju, przesyłana z Wemos D1
 {
 	RoomHumid = param.asInt();
-	SetHumidAuto = RoomHumid + 15;
 }
 
-BLYNK_WRITE(V11)			//Sterowanie wentylatorem z aplikacji
+BLYNK_WRITE(V11)			//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
 {
-	switch (param.asInt()){
-		case 1:					//Ogrzewanie w trybie automatycznym na podstawie harmonogramu SetTemp
-			Fan_Manual = 0;
-			Fan_State = 0;
+	switch (param.asInt())
+	{
+		case 1:				//AUTO
+			Tryb_Sterownika = 0;
 			break;
-		case 2:					//Ogrzewanie w trybie ręcznym ON
-			Fan_Manual = 1;
-			Fan_State = 1;
+		case 2:				//ON
+			Tryb_Sterownika = 1;
 			break;
-		case 3:					//Ogrzewanie w trybie ręcznym OFF
-			Fan_Manual = 1;
-			Fan_State = 0;
+		case 3:				//OFF
+			Tryb_Sterownika = 2;
 			break;
-		case 4:					//Ogrzewanie w trybie ręcznym z zadaną temperaturą 'SetTemp'
-			Fan_Manual = 1;
-			Fan_State = 2;
+		case 4:				//MAN
+			Tryb_Sterownika = 3;
 			break;
-			default:			//Wartość domyślna to tryb automatyczny
-			Fan_Manual = 0;
-			Fan_State = 0;
+		default:		//Wartość domyślna AUTO
+			Tryb_Sterownika = 0;
+			break;
 	}
 }
 
@@ -356,8 +362,9 @@ void setup()
 	Blynk.config(auth);
 
 	//Inicjalizacja Timerów
-	TimerBlynkCheck.setInterval(checkInterval, blynkCheck);		//Multiple timer https://codebender.cc/example/SimpleTimer/SimpleTimerAlarmExample#SimpleTimerAlarmExample.ino
-	TimerMainFunction.setInterval(3000, MainFunction);		//1000 = 1s
+	Timer.setInterval(30000, blynkCheck);			//Sprawdza czy BLYNK połączony co 30s
+	Timer.setInterval(3000, MainFunction);			//Uruchamia wszystko w pętli co 3s
+
 
 	Wire.begin();
 
@@ -366,6 +373,7 @@ void setup()
 	digitalWrite(BathFan, HIGH);			//Domyślnie wyłączony (stan wysoki HIGH)
 	pinMode(Piec_CO, OUTPUT);			//Deklaracja pinu na którym będzie włączany piec CO
 	digitalWrite(Piec_CO, HIGH);			//Domyślnie wyłączony (stan wysoki HIGH)
+
 	pinMode(PIR_Sensor, INPUT);			//Deklaracja pinu z sensorem ruchu AM312
 
 	pinMode(LED_Light, OUTPUT);			//Deklaracja pinu z MOSFETem do iluminacji sedesu
@@ -388,15 +396,15 @@ void setup()
 
 void loop()
 {
-	TimerBlynkCheck.run();
-	TimerMainFunction.run();
-	TimerSedes.run();
+	if (Blynk.connected()) Blynk.run();
+	Timer.run();
 	OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
+	
 	LightDimmer::update();		//updates all FadeLed objects
 
 	if (TimerSedes.isEnabled(timerID) && digitalRead(PIR_Sensor) == 1 && analogRead(PhotoResistor) < ProgPhotoresistor)			//Returns true if the specified timer is enabled
 	{
-		TimerSedes.restartTimer(timerID);		//Wydłuża illuminacje sedesu o kolejne 30s
+		TimerSedes.restartTimer(timerID);		//Wydłuża iluminacje sedesu o kolejne 30s
 	}
 	else if (!TimerSedes.isEnabled(timerID) && digitalRead(PIR_Sensor) == 1 && analogRead(PhotoResistor) < ProgPhotoresistor)		//Returns true if the specified timer is enabled
 	{
@@ -408,8 +416,6 @@ void loop()
 		TimerSedes.deleteTimer(timerID);		//Wyłącza Timer 
 		SedesIlluminationOFF();				//Wyłącza iluminację sedesu
 	}
-
-	if (Blynk.connected()) Blynk.run();
 }
 
 void handleInterrupt()			//Obsługa przerwań wywoływanych przez czujnik PIR AM312
@@ -423,6 +429,7 @@ void handleInterrupt()			//Obsługa przerwań wywoływanych przez czujnik PIR AM
 
 void SedesIlluminationOFF()		//Powolne wygaszenie iluminacji sedesu, czas 0.5s
 {
+
 	SedesDimmer.off();
-	Serial.println("Illuminacja wyłączona");
+	Serial.println("Iluminacja wyłączona");
 }

@@ -34,8 +34,7 @@ bool OTAConfigured = 0;
 WidgetBridge bridge1(V20);				//Initiating Bridge Widget on V20 of Device A
 WidgetTerminal terminal(V40);				//Attach virtual serial terminal to Virtual Pin V40
 WidgetLED LED_CO(V8);					//Inicjacja diody LED dla załączania CO
-SimpleTimer TimerBlynkCheck;				//Do sprawdzana połączenia z Blynkiem uruchamiany do 30s
-SimpleTimer TimerMainFunction;				//dla MainFunction uruchamiany do 3s
+SimpleTimer Timer;					//Timer do sprawdzania połaczenia z BLYNKiem (co 30s) i uruchamiania MainFunction (co 3s)
 WidgetRTC rtc;						//Inicjacja widgetu zegara czasu rzeczywistego RTC
 
 int		Tryb_Sterownika		= 0;		//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
@@ -65,10 +64,10 @@ int		godz			= 1;		// the hour now (0-23)
 float		temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);	//Zmienne dla danych z czujnika BME280
 
 //STAŁE
-const char  ssid[]			= "XXXX";
-const char  pass[]			= "XXXX";
-const char  auth[]			= "XXXX";	//Token Pokój Rymanowska
-const int	checkInterval		= 30000;	//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
+const char	ssid[]			= "XXXX";
+const char	pass[]			= "XXXX";
+const char	auth[]			= "XXXX";	//Token Pokój Rymanowska
+//const int	checkInterval		= 30000;	//Co 30s zostanie sprawdzony czy jest sieć Wi-Fi i czy połączono z serwerem Blynk
 const int	HeatCO			= D6;		//Pin do włączania CO w sterowniku w łazience
 const int	MinTemp			= 14;		//Najniższa możliwa temperatura do ustawienia
 const int	MaxTemp			= 26;		//Najwyższa możliwa temperatura do ustawienia
@@ -265,7 +264,7 @@ void TrybManAuto()			//Ustawienie trybów sterowania i temperatury do załączen
 void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 {
 	bme.readSensor();				//Odczyt wskazań z czujnika BME280
-	pres = bme.getPressure_MB() + 24.634;		//Korekta dostosowująca do ciśnienia na poziomie moża
+	pres = bme.getPressure_MB() + 24.634;		//Korekta dostosowująca do ciśnienia na poziomie morza
 	hum = bme.getHumidity();
 	temp = bme.getTemperature_C();
 	EnvironmentCalculations::AltitudeUnit envAltUnit  =  EnvironmentCalculations::AltitudeUnit_Meters;
@@ -410,8 +409,13 @@ void Wyslij_Dane()			//Wysyłanie danych na serwer Blynka
 	Blynk.virtualWrite(V5, heatIndex);			//Temperatura odczuwalna [°C] 
 	Blynk.virtualWrite(V6, RH);				//Wilgotność gleby [%]  
 	Blynk.virtualWrite(V18, SetTempActual);			//Temperatura zadana [°C]
-	Blynk.virtualWrite(V25, constrain(map(WiFi.RSSI(), -105, -40, 0, 100), 0, 100)); //Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
+	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); //Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
 	bridge1.virtualWrite(V21, hum);				//Wilgotność w pokoju wysyłana do sterownika w łazience [%]
+}
+
+int WiFi_Strength (long Signal)		//Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
+{
+	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
 }
 
 BLYNK_WRITE(V40)			//Obsługa terminala
@@ -424,10 +428,10 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.clear();
 		terminal.println("PORT     DESCRIPTION        UNIT");
 		terminal.println("V0   ->  Temperature        °C");
-		terminal.println("V1   ->  Humdity            %");
+		terminal.println("V1   ->  Humidity           %");
 		terminal.println("V2   ->  Pressure           HPa");
 		terminal.println("V3   ->  DewPoint           °C");
-		terminal.println("V4   ->  Abs Humdity        g/m3");
+		terminal.println("V4   ->  Abs Humidity       g/m3");
 		terminal.println("V5   ->  Heat Index         °C");
 		terminal.println("V6   ->  Wilgotność gleby   %");
 		terminal.println("V10  <-  OLED_ON            1/0");
@@ -444,7 +448,7 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.print("V0     Temperature   =   ");
 		terminal.print(temp);
 		terminal.println(" °C");
-		terminal.print("V1     Humdity       =   ");
+		terminal.print("V1     Humidity      =   ");
 		terminal.print(hum);
 		terminal.println(" %");
 		terminal.print("V2     Pressure      =   ");
@@ -453,7 +457,7 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.print("V3     DewPoint      =   ");
 		terminal.print(dewPoint);
 		terminal.println(" °C");
-		terminal.print("V4     Abs Humdity   =   ");
+		terminal.print("V4     Abs Humidity  =   ");
 		terminal.print(absHum);
 		terminal.println(" g/m3");
 		terminal.print("V5     Heat Index    =   ");
@@ -463,7 +467,7 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.print(OLED_ON);
 		terminal.println(" ");
 		terminal.print("V25    WiFi Signal   =   ");
-		terminal.print(constrain(map(WiFi.RSSI(), -105, -40, 0, 100), 0, 100));
+		terminal.print(WiFi_Strength(WiFi.RSSI()));
 		terminal.println(" %");
 	}
 	else if (String("hello") == TerminalCommand)
@@ -533,8 +537,8 @@ void setup()
 	Blynk.config(auth);
 
 	//Inicjalizacja Timerów
-	TimerBlynkCheck.setInterval(checkInterval, blynkCheck);		//Multiple timer https://codebender.cc/example/SimpleTimer/SimpleTimerAlarmExample#SimpleTimerAlarmExample.ino
-	TimerMainFunction.setInterval(3000, MainFunction);		//1000 = 1s
+	Timer.setInterval(30000, blynkCheck);		//Sprawdza czy BLYNK połączony co 30s
+	Timer.setInterval(3000, MainFunction);		//Uruchamia wszystko w pętli co 3s
 
 	Wire.begin();
 
@@ -571,8 +575,7 @@ void setup()
 
 void loop()
 {
-	TimerBlynkCheck.run();
-	TimerMainFunction.run();
-	OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
 	if (Blynk.connected()) Blynk.run();
+	Timer.run();
+	OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
 }
