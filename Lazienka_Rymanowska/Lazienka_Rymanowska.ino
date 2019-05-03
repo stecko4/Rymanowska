@@ -20,7 +20,7 @@ BME280_I2C bme(0x76);			//I2C using address 0x76
 bool OTAConfigured = 0;
 
 //#define BLYNK_DEBUG			//Optional, this enables lots of prints
-#define BLYNK_PRINT Serial
+//#define BLYNK_PRINT Serial
 #include <ESP8266WiFi.h>
 #include <BlynkSimpleEsp8266.h>
 WidgetTerminal terminal(V40);				//Attach virtual serial terminal to Virtual Pin V40
@@ -167,6 +167,11 @@ void MainFunction()			//Robi wszystko co powinien
 	TrybManAuto();				//Ustawienie trybów sterowania wilgotnością
 	Bathrum_Humidity_Control();		//Włącza wentylator jeśli wilgotność przekracza próg ale Piec CO jest wyłączony
 	Wyslij_Dane();				//Wysyła dane do serwera Blynk
+
+	if (digitalRead(PIR_Sensor) == 1)	//Ma na celu przedłużenie timera do podświetlenia
+	{
+		handleInterrupt();
+	}
 }
 
 void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli warunek spełnionyBathFan_Value
@@ -218,6 +223,8 @@ void Wyslij_Dane()			//Wysyła dane na serwer Blynk
 	Blynk.virtualWrite(V5, heatIndex);		//Temperatura odczuwalna [°C]
 	Blynk.virtualWrite(V6, SetHumidActual);		//Wilgotności przy której załączy się wentylator w trybie automatycznym [%] 
 	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); //Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
+	Blynk.virtualWrite(V55, analogRead(PhotoResistor));	//Czujnik światła
+	Blynk.virtualWrite(V56, digitalRead(PIR_Sensor));	//Czujnik światła
 }
 
 void TrybManAuto()			//Ustawienie trybów sterowania wilgotnością
@@ -398,38 +405,31 @@ void loop()
 {
 	if (Blynk.connected()) Blynk.run();
 	Timer.run();
-	OTA_Handle();			//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
-	
-	LightDimmer::update();		//updates all FadeLed objects
+	OTA_Handle();				//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
 
-	if (TimerSedes.isEnabled(timerID) && digitalRead(PIR_Sensor) == 1 && analogRead(PhotoResistor) < ProgPhotoresistor)			//Returns true if the specified timer is enabled
+	LightDimmer::update();			//updates all FadeLed objects
+	
+	if ( SedesDimmer.isOn() && analogRead(PhotoResistor) > ProgPhotoresistor )
 	{
-		TimerSedes.restartTimer(timerID);		//Wydłuża iluminacje sedesu o kolejne 30s
-	}
-	else if (!TimerSedes.isEnabled(timerID) && digitalRead(PIR_Sensor) == 1 && analogRead(PhotoResistor) < ProgPhotoresistor)		//Returns true if the specified timer is enabled
-	{
-		SedesDimmer.on();				//Włącza iluminację sedesu
-		timerID = TimerSedes.setTimeout(20000, SedesIlluminationOFF);									//Wyłączy iluminacje sedesu za 30s
-	}
-	else if ( TimerSedes.isEnabled(timerID) && analogRead(PhotoResistor) > ProgPhotoresistor)						//Returns true if the specified timer is enabled
-	{
-		TimerSedes.deleteTimer(timerID);		//Wyłącza Timer 
-		SedesIlluminationOFF();				//Wyłącza iluminację sedesu
+		Timer.deleteTimer(timerID);	//Wyłącza Timer 
+		SedesIlluminationOFF();		//Wyłącza iluminację sedesu
 	}
 }
 
 void handleInterrupt()			//Obsługa przerwań wywoływanych przez czujnik PIR AM312
 {
-	if ( !TimerSedes.isEnabled(timerID) && analogRead(PhotoResistor) < ProgPhotoresistor )	//Returns true if the specified timer is enabled
+	if (SedesDimmer.isOn() && Timer.isEnabled(timerID) && analogRead(PhotoResistor) < ProgPhotoresistor)
 	{
+		Timer.restartTimer(timerID);				//Wydłuża iluminacje sedesu o kolejne 30s
+	}
+	else if (analogRead(PhotoResistor) < ProgPhotoresistor )		//Returns true if the specified timer is enabled
+	{
+		timerID = Timer.setTimeout(30000, SedesIlluminationOFF);	//Wyłączy iluminacje sedesu za 30s
 		SedesDimmer.on();
-		timerID = TimerSedes.setTimeout(10000, SedesIlluminationOFF);			//Wyłączy iluminacje sedesu za 30s
 	}
 }
 
 void SedesIlluminationOFF()		//Powolne wygaszenie iluminacji sedesu, czas 0.5s
 {
-
 	SedesDimmer.off();
-	Serial.println("Iluminacja wyłączona");
 }
