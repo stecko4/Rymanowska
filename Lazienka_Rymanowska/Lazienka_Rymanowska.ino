@@ -406,8 +406,7 @@ void loop()
 	if ( isLED_Light && analogRead(PhotoResistor) > ProgPhotoresistor )
 	{
 		Timer.deleteTimer(timerID);	//Wyłącza Timer 
-		digitalWrite(LED_Light, LOW);
-		isLED_Light = false;
+		SedesIlluminationOFF();
 	}
 }
 
@@ -423,4 +422,10 @@ void handleInterrupt()			//Obsługa przerwań wywoływanych przez czujnik PIR AM
 		digitalWrite(LED_Light, HIGH);
 		isLED_Light = true;
 	}
+}
+
+void SedesIlluminationOFF()
+{
+	digitalWrite(LED_Light, LOW);
+	isLED_Light = false;
 }
