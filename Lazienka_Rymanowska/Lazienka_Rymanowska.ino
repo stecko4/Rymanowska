@@ -34,6 +34,7 @@ float		SetHumidActual		= 50;		//Wilgotności przy której załączy się wentyla
 float		RoomHumid		= 0;		//Wilgotności w pokoju, potrzebna do wyznaczenia wartości wilgotności przy której ma się załączyć wentylator
 int		PhotoResValue		= 0;		//Store value from photoresistor (0-1023)
 int		ProgPhotoresistor	= 450;		//Próg jasności od którego zacznie działać iluminacja sedesu (nie powinno podświetlać jeśli światło w łazience zapalone)
+boolean		isLED_Light		= false;		//TRUE jeśli diody świecą FALSE jeśli nie świecą
 float temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);
 
 //STAŁE
@@ -46,9 +47,6 @@ const int	PIR_Sensor		= D7;		//Deklaracja pinu z sensorem ruchu AM312
 const int	LED_Light		= D8;		//Deklaracja pinu z MOSFETem do iluminacji sedesu
 const int	PhotoResistor		= A0;		//Deklaracja pinu z sensorem światła
 const float	HumidHist		= 4;		//histereza dla wilgotności
-
-#include <LightDimmer.h>				//Rozjaśnianie i przygasanie PWMem
-LightDimmer SedesDimmer;				//Deklaracja do rozjaśniania i ściemniania
 
 BLYNK_CONNECTED()			//Informacja że połączono z serwerem Blynk, synchronizacja danych
 {
@@ -384,9 +382,7 @@ void setup()
 	pinMode(PIR_Sensor, INPUT);			//Deklaracja pinu z sensorem ruchu AM312
 
 	pinMode(LED_Light, OUTPUT);			//Deklaracja pinu z MOSFETem do iluminacji sedesu
-	SedesDimmer.begin(LED_Light,HIGH);		//Deklaracja pinu z MOSFETem do iluminacji sedesu
-	SedesDimmer.setFadingTime(1000);
-	SedesDimmer.setBrighteningTime(1000);
+	digitalWrite(LED_Light, LOW);			//Domyślnie wyłączony (stan niski LOW)
 
 	pinMode(PhotoResistor, INPUT);			//Set pResistor - A0 pin as an input (optional)
 	attachInterrupt(digitalPinToInterrupt(PIR_Sensor), handleInterrupt, HIGH);	//Obsługa przerwań dla czujnika ruchu
@@ -407,29 +403,24 @@ void loop()
 	Timer.run();
 	OTA_Handle();				//Obsługa OTA (Over The Air) wgrywanie nowego kodu przez Wi-Fi
 
-	LightDimmer::update();			//updates all FadeLed objects
-	
-	if ( SedesDimmer.isOn() && analogRead(PhotoResistor) > ProgPhotoresistor )
+	if ( isLED_Light && analogRead(PhotoResistor) > ProgPhotoresistor )
 	{
 		Timer.deleteTimer(timerID);	//Wyłącza Timer 
-		SedesIlluminationOFF();		//Wyłącza iluminację sedesu
+		digitalWrite(LED_Light, LOW);
+		isLED_Light = false;
 	}
 }
 
 void handleInterrupt()			//Obsługa przerwań wywoływanych przez czujnik PIR AM312
 {
-	if (SedesDimmer.isOn() && Timer.isEnabled(timerID) && analogRead(PhotoResistor) < ProgPhotoresistor)
+	if ( isLED_Light && Timer.isEnabled(timerID) && analogRead(PhotoResistor) < ProgPhotoresistor)
 	{
 		Timer.restartTimer(timerID);				//Wydłuża iluminacje sedesu o kolejne 30s
 	}
 	else if (analogRead(PhotoResistor) < ProgPhotoresistor )		//Returns true if the specified timer is enabled
 	{
 		timerID = Timer.setTimeout(30000, SedesIlluminationOFF);	//Wyłączy iluminacje sedesu za 30s
-		SedesDimmer.on();
+		digitalWrite(LED_Light, HIGH);
+		isLED_Light = true;
 	}
-}
-
-void SedesIlluminationOFF()		//Powolne wygaszenie iluminacji sedesu, czas 0.5s
-{
-	SedesDimmer.off();
 }
