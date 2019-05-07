@@ -33,7 +33,7 @@ float		SetHumidManual		= 75;		//Wilgotności przy której załączy się wentyla
 float		SetHumidActual		= 50;		//Wilgotności przy której załączy się wentylator
 float		RoomHumid		= 0;		//Wilgotności w pokoju, potrzebna do wyznaczenia wartości wilgotności przy której ma się załączyć wentylator
 int		PhotoResValue		= 0;		//Store value from photoresistor (0-1023)
-int		ProgPhotoresistor	= 450;		//Próg jasności od którego zacznie działać iluminacja sedesu (nie powinno podświetlać jeśli światło w łazience zapalone)
+int		ProgPhotoresistor	= 300;		//Próg jasności od którego zacznie działać iluminacja sedesu (nie powinno podświetlać jeśli światło w łazience zapalone)
 boolean		isLED_Light		= false;		//TRUE jeśli diody świecą FALSE jeśli nie świecą
 float temp(NAN), hum(NAN), pres(NAN), dewPoint(NAN), absHum(NAN), heatIndex(NAN);
 
@@ -179,22 +179,29 @@ void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli w
 		digitalWrite(BathFan, HIGH);		//turn on relay with voltage HIGH
 		Blynk.virtualWrite(V8, 0);		//Wentylator Wyłączony
 	}
-	else if (Tryb_Sterownika == 1)		//Wilgotność w trybie ręcznym ON
+	else if (Tryb_Sterownika == 1)			//Wilgotność w trybie ręcznym ON
 	{
 		digitalWrite(BathFan, LOW);		//turn on relay with voltage LOW
 		Blynk.virtualWrite(V8, 255);		//Wentylator włączony
 	}
-	else if (hum >= SetHumidActual + HumidHist)	
+	else if (hum >= SetHumidActual + HumidHist)
 	{
-		digitalWrite(BathFan, LOW);		//turn on relay with voltage LOW
-		Blynk.virtualWrite(V8, 255);		//Wentylator włączony
+		if (temp > 22 || analogRead(PhotoResistor) < ProgPhotoresistor)
+		{
+			digitalWrite(BathFan, LOW);	//turn on relay with voltage HIGH
+			Blynk.virtualWrite(V8, 255);	//Wentylator Włączony
+		}
+		else
+		{
+			digitalWrite(BathFan, HIGH);	//turn on relay with voltage HIGH
+			Blynk.virtualWrite(V8, 0);	//Wentylator Wyłączony
+		}
 	}
-	else if (hum <= SetHumidActual - HumidHist)		
+	else if (hum <= SetHumidActual - HumidHist)
 	{
 		digitalWrite(BathFan, HIGH);		//turn on relay with voltage HIGH
 		Blynk.virtualWrite(V8, 0);		//Wentylator Wyłączony
 	}
-
 }
 
 void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
@@ -279,6 +286,8 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.println("V10  <-  SetHumidManual     %");
 		terminal.println("V11  <-  Fan Manual & State 1,2,3,4");
 		terminal.println("V25  ->  WiFi Signal        %");
+		terminal.println("V55  ->  PhotoResistor      -");
+		terminal.println("V56  ->  PIR_Sensor         0/1");
 		terminal.println("V40 <->  Terminal           String");
 	}
 	else if (String("values") == TerminalCommand)
@@ -306,6 +315,10 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.print("V10    SetHumidManual =   ");
 		terminal.print(SetHumidManual);
 		terminal.println(" %");
+		terminal.print("V55    PhotoResistor  =   ");
+		terminal.print(analogRead(PhotoResistor));
+		terminal.print("V56    PIR_Sensor  =   ");
+		terminal.print(digitalRead(PIR_Sensor_);
 		terminal.print("V25    WiFi Signal    =   ");
 		terminal.print(WiFi_Strength(WiFi.RSSI()));
 		terminal.println(" %");
