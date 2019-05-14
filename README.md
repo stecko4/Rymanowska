@@ -1,1 +1,1 @@
-# Rymanowska
+# Patrz Wiki
