@@ -186,7 +186,7 @@ void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli w
 	}
 	else if (hum >= SetHumidActual + HumidHist)
 	{
-		if (temp > 22 || analogRead(PhotoResistor) < ProgPhotoresistor)
+		if (temp > 24 || analogRead(PhotoResistor) < ProgPhotoresistor)
 		{
 			digitalWrite(BathFan, LOW);	//turn on relay with voltage HIGH
 			Blynk.virtualWrite(V8, 255);	//Wentylator Włączony
@@ -318,7 +318,7 @@ BLYNK_WRITE(V40)			//Obsługa terminala
 		terminal.print("V55    PhotoResistor  =   ");
 		terminal.print(analogRead(PhotoResistor));
 		terminal.print("V56    PIR_Sensor  =   ");
-		terminal.print(digitalRead(PIR_Sensor_);
+		terminal.print(digitalRead(PIR_Sensor));
 		terminal.print("V25    WiFi Signal    =   ");
 		terminal.print(WiFi_Strength(WiFi.RSSI()));
 		terminal.println(" %");
@@ -431,7 +431,7 @@ void handleInterrupt()			//Obsługa przerwań wywoływanych przez czujnik PIR AM
 	}
 	else if (analogRead(PhotoResistor) < ProgPhotoresistor )		//Returns true if the specified timer is enabled
 	{
-		timerID = Timer.setTimeout(30000, SedesIlluminationOFF);	//Wyłączy iluminacje sedesu za 30s
+		timerID = Timer.setTimeout(45000, SedesIlluminationOFF);	//Wyłączy iluminacje sedesu za 45s
 		digitalWrite(LED_Light, HIGH);
 		isLED_Light = true;
 	}
