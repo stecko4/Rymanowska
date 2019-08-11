@@ -1,3 +1,4 @@
+#include <Arduino.h>
 /*Connecting the BME280 Sensor:
 Sensor              ->  Board
 -----------------------------
@@ -6,12 +7,21 @@ Gnd (Ground)        ->  Gnd
 SDA (Serial Data)   ->  D2 on NodeMCU / Wemos D1 PRO
 SCK (Serial Clock)  ->  D1 on NodeMCU / Wemos D1 PRO */
 
-//BME280 definition and Mutichannel_Gas_Sensor
+//BME280 definition
 #include <EnvironmentCalculations.h>
 #include <Wire.h>
-#include "cactus_io_BME280_I2C.h"
-//Create BME280 object
-BME280_I2C bme(0x76);			//I2C using address 0x76
+#include <BME280I2C.h>
+BME280I2C::Settings settings(
+   BME280::OSR_X1,
+   BME280::OSR_X1,
+   BME280::OSR_X1,
+   BME280::Mode_Forced,
+   BME280::StandbyTime_125ms,
+   BME280::Filter_Off,
+   BME280::SpiEnable_False
+   //BME280I2C::I2CAddr_0x76 // I2C address. I2C specific.
+);
+BME280I2C bme(settings);
 
 //Wyświetlacz OLED
 #include <Arduino.h>
@@ -185,16 +195,6 @@ void OTA_Handle()			//Deklaracja OTA_Handle:
 	}
 }
 
-void MainFunction()			//Robi wszystko co powinien
-{
-	Read_BME280_Values();		//Odczyt danych z czujnika BME280
-	TrybManAuto();			//Ustawienie trybów sterowania i temperatury do załączenia pieca CO
-	RH = ReadSoilMoisture();	//Odczyt z czujnika wilgotności gleby i konwersja do wartości 0 - 100%
-	Room_Temp_Control();		//kontrola temperatury na podstawie odczytów z BME280
-	OLED_Display();			//Wyświetlanie na ekranie OLED 0.96"
-	Wyslij_Dane();			//Wysyła dane do serwera Blynk
-}
-
 void TrybManAuto()			//Ustawienie trybów sterowania i temperatury do załączenia pieca CO
 {
 	//Start Manual za pomocą Time Input
@@ -215,7 +215,7 @@ void TrybManAuto()			//Ustawienie trybów sterowania i temperatury do załączen
 			stopAt = CZAS_START_AUTO;
 		}
 		Blynk.virtualWrite(V13, startAt, stopAt, "Europe/Warsaw");
-	}
+	} 
 	// Start Auto za pomocą Time Input
 	if (CZAS_START_AUTO > 0 && hour(now()) * 60 + minute(now()) == CZAS_START_AUTO / 60)		//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
 	{
@@ -263,11 +263,14 @@ void TrybManAuto()			//Ustawienie trybów sterowania i temperatury do załączen
 
 void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 {
-	bme.readSensor();				//Odczyt wskazań z czujnika BME280
-	pres = bme.getPressure_MB() + 24.634;		//Korekta dostosowująca do ciśnienia na poziomie morza
-	hum = bme.getHumidity();
-	temp = bme.getTemperature_C();
-	EnvironmentCalculations::AltitudeUnit envAltUnit  =  EnvironmentCalculations::AltitudeUnit_Meters;
+	BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
+	BME280::PresUnit presUnit(BME280::PresUnit_Pa);
+
+	bme.read(pres, temp, hum, tempUnit, presUnit);
+	temp = temp -3;							//Korekta dla temperatury. BME280 się trochę grzeje 
+	pres = pres + 24.634;					//Korekta dostosowująca do ciśnienia na poziomie morza
+	hum = hum + 9.06;						//Korekta poziomu wilgotności odczytanegoe prze BME280.
+
 	EnvironmentCalculations::TempUnit     envTempUnit =  EnvironmentCalculations::TempUnit_Celsius;
 	//Dane obliczane na podstawie danych z czujnika
 	dewPoint = EnvironmentCalculations::DewPoint(temp, hum, envTempUnit);
@@ -285,7 +288,7 @@ float ReadSoilMoisture()		//Odczyt z czujnika wilgotności gleby i konwersja do 
 		sval = sval + analogRead(A0);	//sensor on analog pin 0
 	}
 	sval = sval / 5;
-	sval = map(sval, 818, 427, 0, 100);	//Convert to Relative Humidity in % (818 -> sensor in air, 427 -> sensor in water)
+	sval = map(sval, 814, 436, 0, 100);	//Convert to Relative Humidity in % (818 -> sensor in air, 427 -> sensor in water)
 	sval = constrain(sval, 0, 100);		//Limits range of sensor values to between 10 and 150
 	//informacja o podlaniu
 	if (sval > 80 && Podlane == false)
@@ -326,19 +329,19 @@ void Room_Temp_Control()		//Sterowanie piecem w zależności od temperatury
 	{
 		bridge1.digitalWrite(HeatCO, 0);	//Wysłanie sygnału do włączenia pieca
 		LED_CO.on();				//Piec CO grzeje
-		digitalWrite(BUILTIN_LED, LOW);		//Niebieska dioda WEMOSA gaśnie
+		digitalWrite(LED_BUILTIN, LOW);		//Niebieska dioda WEMOSA gaśnie
 	}
 	else if (temp < SetTempActual - TemtHist)
 	{
 		bridge1.digitalWrite(HeatCO, 0);	//Wysłanie sygnału do włączenia pieca
 		LED_CO.on();				//Piec CO grzeje
-		digitalWrite(BUILTIN_LED, LOW);		//Niebieska dioda WEMOSA gaśnie
+		digitalWrite(LED_BUILTIN, LOW);		//Niebieska dioda WEMOSA gaśnie
 	}
 	else if (temp > SetTempActual + TemtHist)
 	{
 		bridge1.digitalWrite(HeatCO, 1023);	//Wysłanie sygnału do wyłączenia pieca (1023 bo piny obsługują PWM i nadanie "1" nie działa)
 		LED_CO.off();				//Piec CO nie grzeje
-		digitalWrite(BUILTIN_LED, HIGH);	//Niebieska dioda WEMOSA świeci
+		digitalWrite(LED_BUILTIN, HIGH);	//Niebieska dioda WEMOSA świeci
 	}
 }
 
@@ -399,6 +402,11 @@ void OLED_Display()			//Wyświetlanie na ekranie OLED 0.96"
 	}
 }
 
+int WiFi_Strength (long Signal)		//Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
+{
+	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
+}
+
 void Wyslij_Dane()			//Wysyłanie danych na serwer Blynka
 {
 	Blynk.virtualWrite(V0, temp);				//Temperatura [°C]
@@ -411,11 +419,6 @@ void Wyslij_Dane()			//Wysyłanie danych na serwer Blynka
 	Blynk.virtualWrite(V18, SetTempActual);			//Temperatura zadana [°C]
 	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); //Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
 	bridge1.virtualWrite(V21, hum);				//Wilgotność w pokoju wysyłana do sterownika w łazience [%]
-}
-
-int WiFi_Strength (long Signal)		//Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
-{
-	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
 }
 
 BLYNK_WRITE(V40)			//Obsługa terminala
@@ -528,6 +531,16 @@ BLYNK_WRITE(V13)			//Obsługa timera Start Manual i Start Auto (Time Input Widge
 	CZAS_START_AUTO = param[1].asLong();		//Ustawienie czasu przejścia sterowania w trym AUTO (wartość w sekundach)
 }
 
+void MainFunction()			//Robi wszystko co powinien
+{
+	Read_BME280_Values();		//Odczyt danych z czujnika BME280
+	TrybManAuto();			//Ustawienie trybów sterowania i temperatury do załączenia pieca CO
+	RH = ReadSoilMoisture();	//Odczyt z czujnika wilgotności gleby i konwersja do wartości 0 - 100%
+	Room_Temp_Control();		//kontrola temperatury na podstawie odczytów z BME280
+	OLED_Display();			//Wyświetlanie na ekranie OLED 0.96"
+	Wyslij_Dane();			//Wysyła dane do serwera Blynk
+}
+
 /***********************************************************************************************/
 
 void setup()
@@ -543,7 +556,7 @@ void setup()
 	Wire.begin();
 
 	//Ustawianie pinów
-	pinMode(BUILTIN_LED, OUTPUT);					//Będzie mrugał diodą
+	pinMode(LED_BUILTIN, OUTPUT);					//Będzie mrugał diodą
 
 	//inicjowanie wyświetlacza
 	u8g2.begin();
@@ -569,8 +582,6 @@ void setup()
 		Serial.println("Could not find a valid BME280 sensor, check wiring!");
 		while (1);
 	}
-
-	bme.setTempCal(-5.8);						// Temp was reading high so subtract 5.8 degree 
 }
 
 void loop()
