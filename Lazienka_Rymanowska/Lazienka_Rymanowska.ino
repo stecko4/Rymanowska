@@ -1,3 +1,5 @@
+#include <Arduino.h>
+#include <SPI.h>
 /*Connecting the BME280 Sensor:
 Sensor              ->  Board
 -----------------------------
@@ -6,12 +8,21 @@ Gnd (Ground)        ->  Gnd
 SDA (Serial Data)   ->  D2 on NodeMCU / Wemos D1 PRO
 SCK (Serial Clock)  ->  D1 on NodeMCU / Wemos D1 PRO */
 
-//BME280 definition and Mutichannel_Gas_Sensor
+//BME280 definition
 #include <EnvironmentCalculations.h>
 #include <Wire.h>
-#include "cactus_io_BME280_I2C.h"
-//Create BME280 object
-BME280_I2C bme(0x76);			//I2C using address 0x76
+#include <BME280I2C.h>
+BME280I2C::Settings settings(
+   BME280::OSR_X1,
+   BME280::OSR_X1,
+   BME280::OSR_X1,
+   BME280::Mode_Forced,
+   BME280::StandbyTime_125ms,
+   BME280::Filter_Off,
+   BME280::SpiEnable_False
+   //BME280I2C::I2CAddr_0x76 // I2C address. I2C specific.
+);
+BME280I2C bme(settings);
 
 //for OTA
 #include <ESP8266mDNS.h>
@@ -159,19 +170,6 @@ void OTA_Handle()			//Deklaracja OTA_Handle:
 	}
 }
 
-void MainFunction()			//Robi wszystko co powinien
-{
-	Read_BME280_Values();			//Odczyt danych z czujnika BME280
-	TrybManAuto();				//Ustawienie trybów sterowania wilgotnością
-	Bathrum_Humidity_Control();		//Włącza wentylator jeśli wilgotność przekracza próg ale Piec CO jest wyłączony
-	Wyslij_Dane();				//Wysyła dane do serwera Blynk
-
-	if (digitalRead(PIR_Sensor) == 1)	//Ma na celu przedłużenie timera do podświetlenia
-	{
-		handleInterrupt();
-	}
-}
-
 void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli warunek spełnionyBathFan_Value
 {
 	if (Tryb_Sterownika == 2)		//Wilgotność w trybie ręcznym OFF
@@ -206,11 +204,14 @@ void Bathrum_Humidity_Control()		//Załączanie wentylatora w łazience jeśli w
 
 void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 {
-	bme.readSensor(); 		//Odczyt wskazań z czujnika BME280
-	pres = bme.getPressure_MB();
-	hum = bme.getHumidity();
-	temp = bme.getTemperature_C();
-	EnvironmentCalculations::AltitudeUnit envAltUnit  =  EnvironmentCalculations::AltitudeUnit_Meters;
+	BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
+	BME280::PresUnit presUnit(BME280::PresUnit_Pa);
+
+	bme.read(pres, temp, hum, tempUnit, presUnit);
+	temp = temp -0.33;		//Korekta dla temperatury. BME280 się trochę grzeje 
+	pres = pres + 24.634;		//Korekta dostosowująca do ciśnienia na poziomie morza
+	hum = hum;			//Korekta poziomu wilgotności odczytanegoe prze BME280.
+
 	EnvironmentCalculations::TempUnit     envTempUnit =  EnvironmentCalculations::TempUnit_Celsius;
 	//Dane obliczane na podstawie danych z czujnika
 	dewPoint = EnvironmentCalculations::DewPoint(temp, hum, envTempUnit);
@@ -218,16 +219,21 @@ void Read_BME280_Values()		//Odczyt wskazań z czujnika BME280
 	heatIndex = EnvironmentCalculations::HeatIndex(temp, hum, envTempUnit);
 }
 
+int WiFi_Strength (long Signal)		//Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
+{
+	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
+}
+
 void Wyslij_Dane()			//Wysyła dane na serwer Blynk
 {
-	Blynk.virtualWrite(V0, temp);			//Temperatura [°C]
-	Blynk.virtualWrite(V1, hum);			//Wilgotność [%]
-	Blynk.virtualWrite(V2, pres);			//Ciśnienie [hPa]
-	Blynk.virtualWrite(V3, dewPoint);		//Temperatura punktu rosy [°C]
-	Blynk.virtualWrite(V4, absHum);			//Wilgotność bezwzględna [g/m³]
-	Blynk.virtualWrite(V5, heatIndex);		//Temperatura odczuwalna [°C]
-	Blynk.virtualWrite(V6, SetHumidActual);		//Wilgotności przy której załączy się wentylator w trybie automatycznym [%] 
-	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); //Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
+	Blynk.virtualWrite(V0, temp);				//Temperatura [°C]
+	Blynk.virtualWrite(V1, hum);				//Wilgotność [%]
+	Blynk.virtualWrite(V2, pres);				//Ciśnienie [hPa]
+	Blynk.virtualWrite(V3, dewPoint);			//Temperatura punktu rosy [°C]
+	Blynk.virtualWrite(V4, absHum);				//Wilgotność bezwzględna [g/m³]
+	Blynk.virtualWrite(V5, heatIndex);			//Temperatura odczuwalna [°C]
+	Blynk.virtualWrite(V6, SetHumidActual);			//Wilgotności przy której załączy się wentylator w trybie automatycznym [%] 
+	Blynk.virtualWrite(V25, WiFi_Strength(WiFi.RSSI())); 	//Siła sygnału Wi-Fi [%], constrain() limits range of sensor values to between 0 and 100
 	Blynk.virtualWrite(V55, analogRead(PhotoResistor));	//Czujnik światła
 	Blynk.virtualWrite(V56, digitalRead(PIR_Sensor));	//Czujnik światła
 }
@@ -237,7 +243,7 @@ void TrybManAuto()			//Ustawienie trybów sterowania wilgotnością
 	switch (Tryb_Sterownika)
 	{
 		case 0:					//Wilgotność w trybie AUTO na podstawie wilgotności w pokoju + histereza
-			if (RoomHumid + 15 < 50)		//Wilgotność w trybie AUTO
+			if (RoomHumid + 15 < 50)	//Wilgotność w trybie AUTO
 				{
 					SetHumidActual = 50;
 				}
@@ -255,17 +261,12 @@ void TrybManAuto()			//Ustawienie trybów sterowania wilgotnością
 		case 3:					//Wilgotność w trybie MANUAL z zadaną wilgotnością
 			SetHumidActual = SetHumidManual;
 			break;
-		default:		//Wartość domyślna AUTO
+		default:				//Wartość domyślna AUTO
 			
 			SetHumidActual = RoomHumid + 15;
 			
 			break;
 	}
-}
-
-int WiFi_Strength (long Signal)		//Zwraca siłę sygnału WiFi sieci do której jest podłączony w %. REF: https://www.adriangranados.com/blog/dbm-to-percent-conversion
-{
-	return constrain(round((-0.0154*Signal*Signal)-(0.3794*Signal)+98.182), 0, 100);
 }
 
 BLYNK_WRITE(V40)			//Obsługa terminala
@@ -371,6 +372,39 @@ BLYNK_WRITE(V11)			//Tryb_Sterownika 0 = AUTO, 1 = ON, 2 = OFF, 3 = MANUAL
 	}
 }
 
+void SedesIlluminationOFF()
+{
+	digitalWrite(LED_Light, LOW);
+	isLED_Light = false;
+}
+
+void handleInterrupt()			//Obsługa przerwań wywoływanych przez czujnik PIR AM312
+{
+	if ( isLED_Light && Timer.isEnabled(timerID) && analogRead(PhotoResistor) < ProgPhotoresistor)
+	{
+		Timer.restartTimer(timerID);				//Wydłuża iluminacje sedesu o kolejne 30s
+	}
+	else if (analogRead(PhotoResistor) < ProgPhotoresistor )		//Returns true if the specified timer is enabled
+	{
+		timerID = Timer.setTimeout(45000, SedesIlluminationOFF);	//Wyłączy iluminacje sedesu za 45s
+		digitalWrite(LED_Light, HIGH);
+		isLED_Light = true;
+	}
+}
+
+void MainFunction()			//Robi wszystko co powinien
+{
+	Read_BME280_Values();			//Odczyt danych z czujnika BME280
+	TrybManAuto();				//Ustawienie trybów sterowania wilgotnością
+	Bathrum_Humidity_Control();		//Włącza wentylator jeśli wilgotność przekracza próg ale Piec CO jest wyłączony
+	Wyslij_Dane();				//Wysyła dane do serwera Blynk
+
+	if (digitalRead(PIR_Sensor) == 1)	//Ma na celu przedłużenie timera do podświetlenia
+	{
+		handleInterrupt();
+	}
+}
+
 /***********************************************************************************************/
 
 void setup()
@@ -403,11 +437,9 @@ void setup()
 	//inicjowanie czujnika BME280
 	if (!bme.begin())
 	{
-		Serial.println("Could not find a valid BME280 sensor, check wiring!"); 
+		Serial.println("Could not find a valid BME280 sensor, check wiring!");
 		while (1);
 	}
-
-	bme.setTempCal(0.7);				//Temp was reading high so subtract 0.7 degree
 }
 
 void loop()
@@ -421,24 +453,4 @@ void loop()
 		Timer.deleteTimer(timerID);	//Wyłącza Timer 
 		SedesIlluminationOFF();
 	}
-}
-
-void handleInterrupt()			//Obsługa przerwań wywoływanych przez czujnik PIR AM312
-{
-	if ( isLED_Light && Timer.isEnabled(timerID) && analogRead(PhotoResistor) < ProgPhotoresistor)
-	{
-		Timer.restartTimer(timerID);				//Wydłuża iluminacje sedesu o kolejne 30s
-	}
-	else if (analogRead(PhotoResistor) < ProgPhotoresistor )		//Returns true if the specified timer is enabled
-	{
-		timerID = Timer.setTimeout(45000, SedesIlluminationOFF);	//Wyłączy iluminacje sedesu za 45s
-		digitalWrite(LED_Light, HIGH);
-		isLED_Light = true;
-	}
-}
-
-void SedesIlluminationOFF()
-{
-	digitalWrite(LED_Light, LOW);
-	isLED_Light = false;
 }
